@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}{{ action }} - PTIT{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('labs_list') }}">Labs</a></li>
+        <li class="breadcrumb-item active">{{ action }}</li>
+    </ol>
+</nav>
+
+<div class="row justify-content-center">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-flask me-2"></i>{{ action }}
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Tên Lab <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="name" name="name"
+                               value="{{ lab.name if lab else '' }}" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Mô tả</label>
+                        <textarea class="form-control" id="description" name="description"
+                                  rows="3">{{ lab.description if lab else '' }}</textarea>
+                    </div>
+
+                    <div class="alert alert-info py-2 mb-3">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Quản lý và thành viên Lab được gán sau khi tạo, trong trang
+                        <strong>Quản lý thành viên</strong>.
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('labs_list') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Quay lại
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>Lưu
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

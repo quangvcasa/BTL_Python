@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block title %}Cập nhật – {{ item.title }} - PTIT{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('commitments_list') }}">Cam kết</a></li>
+        <li class="breadcrumb-item">
+            <a href="{{ url_for('commitments_detail', commitment_id=commitment.id) }}">
+                {{ commitment.code }} – {{ commitment.title }}
+            </a>
+        </li>
+        <li class="breadcrumb-item active">Cập nhật hạng mục</li>
+    </ol>
+</nav>
+
+<div class="row justify-content-center">
+    <div class="col-lg-7">
+
+        <!-- Current item state card -->
+        <div class="card mb-3 border-0 bg-light">
+            <div class="card-body py-2 px-3">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <span class="fw-bold">{{ item.title }}</span>
+                        {% if item.assignee %}
+                        <small class="text-muted ms-2">
+                            <i class="fas fa-user me-1"></i>{{ item.assignee.display_name() }}
+                        </small>
+                        {% endif %}
+                    </div>
+                    <span class="badge bg-{{ item.get_status_color() }} fs-6">
+                        {{ item.get_status_label() }}
+                    </span>
+                </div>
+                {% if item.due_date %}
+                <small class="text-muted">
+                    <i class="fas fa-clock me-1"></i>Hạn:
+                    <strong {% if item.is_overdue() %}class="text-danger"{% endif %}>
+                        {{ item.due_date.strftime('%d/%m/%Y %H:%M') }}
+                    </strong>
+                    {% if item.is_overdue() %}<span class="badge bg-danger ms-1">Quá hạn</span>{% endif %}
+                </small>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Update form -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-edit me-2"></i>Ghi nhận tiến độ
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="updateForm" enctype="multipart/form-data">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+                    <!-- New status -->
+                    <div class="mb-3">
+                        <label for="new_status" class="form-label">
+                            Trạng thái mới <span class="text-danger">*</span>
+                        </label>
+                        <div class="d-flex flex-wrap gap-2" id="statusRadioGroup">
+                            {% for val in allowed_statuses %}
+                            {% set label = ei_statuses.get(val, val) %}
+                            {% set colors = {
+                                'not_started': 'secondary',
+                                'in_progress': 'primary',
+                                'pending_review': 'info',
+                                'needs_revision': 'warning',
+                                'completed': 'success',
+                                'rejected': 'danger'
+                            } %}
+                            <div>
+                                <input type="radio" class="btn-check" name="new_status"
+                                       id="status_{{ val }}" value="{{ val }}"
+                                       {% if item.status == val %}checked{% endif %}
+                                       autocomplete="off">
+                                <label class="btn btn-outline-{{ colors.get(val, 'secondary') }}"
+                                       for="status_{{ val }}">
+                                    {{ label }}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <div id="statusError" class="text-danger small mt-1" style="display:none;">
+                            Vui lòng chọn trạng thái.
+                        </div>
+                    </div>
+
+                    <!-- Note (always required) -->
+                    <div class="mb-3">
+                        <label for="note" class="form-label">
+                            Ghi chú cập nhật <span class="text-danger">*</span>
+                        </label>
+                        <textarea class="form-control" id="note" name="note" rows="3"
+                                  placeholder="Mô tả ngắn về tiến độ hiện tại, những gì đã làm..."></textarea>
+                    </div>
+
+                    <!-- Blocker reason (shown/required only for needs_revision) -->
+                    <div class="mb-3" id="blockerSection" style="display:none;">
+                        <label for="blocker_reason" class="form-label">
+                            Lý do cần sửa / vướng mắc <span class="text-danger">*</span>
+                        </label>
+                        <textarea class="form-control" id="blocker_reason" name="blocker_reason" rows="2"
+                                  placeholder="Mô tả vấn đề cụ thể, cần hỗ trợ gì..."></textarea>
+                        <div class="form-text text-warning">
+                            Bắt buộc khi trạng thái là "Cần sửa".
+                        </div>
+                    </div>
+
+                    <!-- Expected finish date (optional) -->
+                    <div class="mb-4">
+                        <label for="expected_finish_date" class="form-label">
+                            Ngày dự kiến hoàn thành
+                            <small class="text-muted">(tùy chọn)</small>
+                        </label>
+                        <input type="datetime-local" class="form-control" id="expected_finish_date"
+                               name="expected_finish_date"
+                               value="{{ item.expected_finish_date.strftime('%Y-%m-%dT%H:%M') if item.expected_finish_date else '' }}"
+                               max="{{ commitment.deadline.strftime('%Y-%m-%dT%H:%M') }}">
+                        <div class="form-text">
+                            Không vượt quá hạn cam kết ({{ commitment.deadline.strftime('%d/%m/%Y') }}).
+                        </div>
+                    </div>
+
+                    <!-- Evidence files -->
+                    <div class="mb-4">
+                        <label for="evidence_files" class="form-label">
+                            Trích minh chứng <small class="text-muted">(tùy chọn)</small>
+                        </label>
+                        <input type="file" class="form-control" id="evidence_files" name="evidence_files" multiple>
+                        <div class="form-text">Ví dụ: ảnh chụp màn hình, hóa đơn, file nén. Giúp quản lý đánh giá nhanh hơn.</div>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('commitments_detail', commitment_id=commitment.id) }}"
+                           class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Quay lại
+                        </a>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <i class="fas fa-save me-2"></i>Lưu cập nhật
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- History timeline -->
+        {% set history = item.updates.all() %}
+        {% if history %}
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-history me-2"></i>Lịch sử cập nhật
+                    <span class="badge bg-secondary ms-1">{{ history|length }}</span>
+                </h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="timeline p-3">
+                    {% for rec in history %}
+                    <div class="timeline-item mb-3 pb-3 {% if not loop.last %}border-bottom{% endif %}">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                {% if rec.update_type == 'review_action' %}
+                                <span class="badge bg-dark mb-1 d-inline-block"><i class="fas fa-gavel me-1"></i>Quản lý Đánh giá</span><br>
+                                {% elif rec.update_type == 'reassignment' %}
+                                <span class="badge bg-info mb-1 d-inline-block text-dark"><i class="fas fa-users-cog me-1"></i>Phân công lại</span><br>
+                                {% endif %}
+                                <span class="badge bg-{{ rec.get_status_color() }}">
+                                    {{ rec.get_status_label() }}
+                                </span>
+                                {% if rec.is_status_change() %}
+                                <small class="text-muted ms-1">
+                                    ← {{ ei_statuses.get(rec.old_status, rec.old_status or '—') }}
+                                </small>
+                                {% endif %}
+                            </div>
+                            <small class="text-muted text-nowrap ms-2">
+                                {{ rec.created_at.strftime('%d/%m/%Y %H:%M') }}
+                            </small>
+                        </div>
+                        {% if rec.note %}
+                        <p class="mb-1 mt-2 small">{{ rec.note }}</p>
+                        {% endif %}
+                        {% if rec.blocker_reason %}
+                        <div class="alert alert-warning py-1 px-2 mb-1">
+                            <i class="fas fa-exclamation-triangle me-1"></i>
+                            <small>{{ rec.blocker_reason }}</small>
+                        </div>
+                        {% endif %}
+                        {% if rec.expected_finish_date %}
+                        <small class="text-muted">
+                            <i class="fas fa-calendar-check me-1"></i>
+                            Dự kiến: {{ rec.expected_finish_date.strftime('%d/%m/%Y') }}
+                        </small>
+                        {% endif %}
+                        {% if rec.evidence_files.count() > 0 %}
+                        <div class="mt-2 text-start">
+                            {% for file in rec.evidence_files.all() %}
+                            <a href="{{ url_for('download_file', filename=file.file_path) }}" 
+                               class="btn btn-sm btn-outline-secondary mb-1" 
+                               title="Tải File">
+                                <i class="fas fa-paperclip me-1"></i>{{ file.original_filename }}
+                            </a>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        <div class="mt-1">
+                            <small class="text-muted">
+                                <i class="fas fa-user me-1"></i>
+                                {{ rec.updated_by.display_name() if rec.updated_by else 'Hệ thống' }}
+                            </small>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const radios      = document.querySelectorAll('input[name="new_status"]');
+    const blocker     = document.getElementById('blockerSection');
+    const statusError = document.getElementById('statusError');
+    const submitBtn   = document.getElementById('submitBtn');
+    const form        = document.getElementById('updateForm');
+
+    function getSelected() {
+        for (const r of radios) { if (r.checked) return r.value; }
+        return '';
+    }
+
+    function toggleBlocker() {
+        const val = getSelected();
+        const needsBlocker = (val === 'needs_revision');
+        blocker.style.display = needsBlocker ? 'block' : 'none';
+        document.getElementById('blocker_reason').required = needsBlocker;
+    }
+
+    radios.forEach(r => r.addEventListener('change', toggleBlocker));
+    toggleBlocker();  // init on load
+
+    form.addEventListener('submit', function (e) {
+        if (!getSelected()) {
+            statusError.style.display = 'block';
+            e.preventDefault();
+        } else {
+            statusError.style.display = 'none';
+        }
+    });
+});
+</script>
+{% endblock %}

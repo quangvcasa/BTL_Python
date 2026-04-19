@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Quản lý thành viên – {{ lab.name }}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('labs_list') }}">Labs</a></li>
+        <li class="breadcrumb-item active">{{ lab.name }} – Quản lý thành viên</li>
+    </ol>
+</nav>
+
+<!-- Lab header -->
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h1 class="page-title mb-1">
+            <i class="fas fa-flask me-2"></i>{{ lab.name }}
+        </h1>
+        {% if lab.description %}
+        <p class="text-muted mb-0">{{ lab.description }}</p>
+        {% endif %}
+    </div>
+    <a href="{{ url_for('labs_edit', lab_id=lab.id) }}" class="btn btn-outline-secondary">
+        <i class="fas fa-edit me-1"></i>Chỉnh sửa Lab
+    </a>
+</div>
+
+<div class="row g-4">
+
+    <!-- ================================================================== -->
+    <!-- LEFT COLUMN: Current manager + Current members                     -->
+    <!-- ================================================================== -->
+    <div class="col-lg-6">
+
+        <!-- Current manager card -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-user-tie me-2"></i>Quản lý Lab</h5>
+                {% if manager_membership %}
+                <span class="badge bg-success">Đã gán</span>
+                {% else %}
+                <span class="badge bg-secondary">Chưa gán</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if manager_membership %}
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <strong>{{ manager_membership.user.username }}</strong>
+                        {% if manager_membership.user.full_name %}
+                        <span class="text-muted ms-1">({{ manager_membership.user.full_name }})</span>
+                        {% endif %}
+                        <br>
+                        {% if manager_membership.user.email %}
+                        <small class="text-muted">
+                            <i class="fas fa-envelope me-1"></i>{{ manager_membership.user.email }}
+                        </small>
+                        {% else %}
+                        <small class="text-muted fst-italic">Chưa có email</small>
+                        {% endif %}
+                        <br>
+                        <small class="text-muted">
+                            Gán từ: {{ manager_membership.created_at.strftime('%d/%m/%Y') }}
+                        </small>
+                    </div>
+                    <!-- Remove manager -->
+                    <form method="POST" style="display:inline;"
+                          onsubmit="return confirm('Xóa quản lý khỏi Lab này?');">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="remove_member">
+                        <input type="hidden" name="membership_id" value="{{ manager_membership.id }}">
+                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                            <i class="fas fa-user-minus"></i>
+                        </button>
+                    </form>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Lab này chưa có quản lý. Gán quản lý ở mục bên dưới.
+                </p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Current members list -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-users me-2"></i>Thành viên</h5>
+                <span class="badge bg-primary">{{ members|length }} người</span>
+            </div>
+            <div class="card-body p-0">
+                {% if members %}
+                <ul class="list-group list-group-flush">
+                    {% for m in members %}
+                    <li class="list-group-item d-flex align-items-center justify-content-between">
+                        <div>
+                            <i class="fas fa-user me-2 text-muted"></i>
+                            <strong>{{ m.user.username }}</strong>
+                            {% if m.user.full_name %}
+                            <span class="text-muted ms-1">({{ m.user.full_name }})</span>
+                            {% endif %}
+                            {% if m.user.email %}
+                            <br>
+                            <small class="text-muted ms-4">
+                                <i class="fas fa-envelope me-1"></i>{{ m.user.email }}
+                            </small>
+                            {% endif %}
+                        </div>
+                        <form method="POST" style="display:inline;"
+                              onsubmit="return confirm('Xóa \'{{ m.user.username }}\' khỏi Lab?');">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="remove_member">
+                            <input type="hidden" name="membership_id" value="{{ m.id }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </form>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <div class="p-3 text-muted text-center">
+                    <i class="fas fa-users fa-2x mb-2 d-block"></i>
+                    Chưa có thành viên nào ngoài quản lý.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+    </div><!-- /left column -->
+
+    <!-- ================================================================== -->
+    <!-- RIGHT COLUMN: Assign manager + Add member forms                    -->
+    <!-- ================================================================== -->
+    <div class="col-lg-6">
+
+        <!-- Assign / change manager -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-user-shield me-2"></i>
+                    {% if manager_membership %}Thay đổi Quản lý{% else %}Gán Quản lý{% endif %}
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="set_manager">
+                    <div class="mb-3">
+                        <label for="manager_user_id" class="form-label">
+                            Chọn user làm quản lý
+                            <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="manager_user_id" name="manager_user_id" required>
+                            <option value="">-- Chọn user --</option>
+                            <!-- Users not yet in this lab -->
+                            {% for u in eligible_users %}
+                            <option value="{{ u.id }}">
+                                {{ u.username }}{% if u.full_name %} – {{ u.full_name }}{% endif %}
+                                {% if u.email %}({{ u.email }}){% endif %}
+                            </option>
+                            {% endfor %}
+                            <!-- Current members can also become manager -->
+                            {% for m in members %}
+                            <option value="{{ m.user.id }}">
+                                ★ {{ m.user.username }}{% if m.user.full_name %} – {{ m.user.full_name }}{% endif %}
+                                (thành viên hiện tại)
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text text-muted">
+                            Quản lý cũ (nếu có) sẽ được chuyển thành thành viên tự động.
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-user-check me-1"></i>
+                        {% if manager_membership %}Thay đổi Quản lý{% else %}Gán Quản lý{% endif %}
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Add member -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-user-plus me-2"></i>Thêm Thành viên</h5>
+            </div>
+            <div class="card-body">
+                {% if eligible_users %}
+                <form method="POST">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="add_member">
+                    <div class="mb-3">
+                        <label for="member_user_id" class="form-label">Chọn user <span class="text-danger">*</span></label>
+                        <select class="form-select" id="member_user_id" name="member_user_id" required>
+                            <option value="">-- Chọn user --</option>
+                            {% for u in eligible_users %}
+                            <option value="{{ u.id }}">
+                                {{ u.username }}{% if u.full_name %} – {{ u.full_name }}{% endif %}
+                                {% if u.email %}({{ u.email }}){% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="fas fa-plus me-1"></i>Thêm vào Lab
+                    </button>
+                </form>
+                {% else %}
+                <div class="text-muted text-center py-2">
+                    <i class="fas fa-check-circle me-1 text-success"></i>
+                    Tất cả user (không phải admin) đã là thành viên của Lab này.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+    </div><!-- /right column -->
+
+</div><!-- /row -->
+
+{% endblock %}

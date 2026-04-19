@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Quản lý Users{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="page-title">
+        <i class="fas fa-users me-3"></i>Quản lý Users
+    </h1>
+    <a href="{{ url_for('users_create') }}" class="btn btn-primary">
+        <i class="fas fa-user-plus me-2"></i>Thêm User mới
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>STT</th>
+                        <th>Tên đăng nhập</th>
+                        <th>Họ và tên</th>
+                        <th>Email</th>
+                        <th>Vai trò</th>
+                        <th>Lab</th>
+                        <th>Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>
+                            <i class="fas fa-user me-2"></i>
+                            <strong>{{ user.username }}</strong>
+                        </td>
+                        <td>{{ user.full_name or '—' }}</td>
+                        <td>
+                            {% if user.email %}
+                            <a href="mailto:{{ user.email }}">{{ user.email }}</a>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.is_admin() %}
+                            <span class="badge bg-warning text-dark">Admin</span>
+                            {% elif user.is_lab_manager() %}
+                            <span class="badge bg-primary">Quản lý Lab</span>
+                            {% else %}
+                            <span class="badge bg-info">Thành viên Lab</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.lab %}
+                            <span class="badge bg-lab">{{ user.lab.name }}</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('users_edit', user_id=user.id) }}"
+                               class="btn btn-sm btn-warning">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            {% if user.id != current_user.id %}
+                            <form method="POST" action="{{ url_for('users_delete', user_id=user.id) }}"
+                                  style="display: inline;"
+                                  onsubmit="return confirm('Bạn có chắc muốn xóa user &quot;{{ user.username }}&quot;?');">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-danger">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            <i class="fas fa-users fa-3x mb-3"></i>
+                            <p>Chưa có user nào</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

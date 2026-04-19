@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}{{ action }} - PTIT{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('users_list') }}">Users</a></li>
+        <li class="breadcrumb-item active">{{ action }}</li>
+    </ol>
+</nav>
+
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-user me-2"></i>{{ action }}
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+                    <!-- Username -->
+                    <div class="mb-3">
+                        <label for="username" class="form-label">
+                            Tên đăng nhập <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="username" name="username"
+                               value="{{ user.username if user else '' }}"
+                               {% if user %}readonly{% else %}required{% endif %}>
+                        {% if user %}
+                        <div class="form-text text-muted">Tên đăng nhập không thể thay đổi sau khi tạo.</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Full name -->
+                    <div class="mb-3">
+                        <label for="full_name" class="form-label">Họ và tên</label>
+                        <input type="text" class="form-control" id="full_name" name="full_name"
+                               value="{{ user.full_name if user and user.full_name else '' }}"
+                               placeholder="Nguyễn Văn A">
+                    </div>
+
+                    <!-- Email -->
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email"
+                               value="{{ user.email if user and user.email else '' }}"
+                               placeholder="example@ptit.edu.vn">
+                        <div class="form-text text-muted">Email phải là duy nhất trong hệ thống.</div>
+                    </div>
+
+                    <!-- Password -->
+                    <div class="mb-3">
+                        <label for="password" class="form-label">
+                            Mật khẩu
+                            {% if not user %}<span class="text-danger">*</span>{% else %}(để trống nếu không đổi){% endif %}
+                        </label>
+                        <input type="password" class="form-control" id="password" name="password"
+                               {{ 'required' if not user else '' }}
+                               placeholder="{% if user %}Để trống để giữ nguyên mật khẩu{% else %}Ít nhất 6 ký tự{% endif %}">
+                    </div>
+
+                    <!-- System role -->
+                    <div class="mb-3">
+                        <label for="role" class="form-label">Vai trò hệ thống <span class="text-danger">*</span></label>
+                        <select class="form-select" id="role" name="role" required>
+                            <option value="user"
+                                {% if not user or user.role in ('user', 'lab_manager', 'lab_member', 'lab') %}selected{% endif %}>
+                                User (Người dùng thông thường)
+                            </option>
+                            <option value="admin"
+                                {% if user and user.role == 'admin' %}selected{% endif %}>
+                                Admin (Quản trị viên hệ thống)
+                            </option>
+                        </select>
+                        <div class="form-text text-muted">
+                            Vai trò trong mỗi Lab (Quản lý / Thành viên) được thiết lập riêng
+                            trong trang <strong>Quản lý Lab</strong>.
+                        </div>
+                    </div>
+
+                    <!-- Current lab membership – read-only info on edit page -->
+                    {% if user %}
+                    <div class="mb-3">
+                        <label class="form-label">Lab hiện tại</label>
+                        {% if user.lab %}
+                        <div class="alert alert-info py-2 mb-1">
+                            <i class="fas fa-flask me-1"></i>
+                            <strong>{{ user.lab.name }}</strong>
+                            <span class="text-muted ms-2">
+                                — để thay đổi Lab, vào <a href="{{ url_for('labs_list') }}">Quản lý Lab</a>
+                            </span>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-secondary py-2 mb-1">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Chưa thuộc Lab nào.
+                            <a href="{{ url_for('labs_list') }}" class="ms-1">Gán Lab tại đây →</a>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{{ url_for('users_list') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Quay lại
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>Lưu
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

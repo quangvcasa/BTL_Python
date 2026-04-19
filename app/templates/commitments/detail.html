@@ -1,0 +1,426 @@
+{% extends "base.html" %}
+{% block title %}{{ commitment.title }} - PTIT{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('commitments_list') }}">Cam kết</a></li>
+        <li class="breadcrumb-item active">Chi tiết</li>
+    </ol>
+</nav>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    {% if commitment.code %}
+                    <code class="me-2 text-muted">{{ commitment.code }}</code>
+                    {% endif %}
+                    <h5 class="mb-0 d-inline">
+                        <i class="fas fa-handshake me-2"></i>{{ commitment.title }}
+                    </h5>
+                </div>
+                <div class="d-flex gap-2 align-items-center">
+                    <span class="badge bg-{{ commitment.get_priority_color() }}">
+                        {{ commitment.priority }}
+                    </span>
+                    <span class="badge bg-{{ commitment.get_status_color() }}">
+                        {{ commitment.status }}
+                    </span>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Lab + Assignee (visible to all) -->
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Lab thực hiện:</strong>
+                        <span class="badge bg-lab ms-1">{{ commitment.lab.name }}</span>
+                        {% if commitment.lab.manager %}
+                        <br><small class="text-muted ms-1">
+                            <i class="fas fa-user-tie me-1"></i>QL: {{ commitment.lab.manager.username }}
+                        </small>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Người phụ trách:</strong>
+                        {% if commitment.assignee %}
+                        <span class="badge bg-info ms-1">{{ commitment.assignee.username }}</span>
+                        {% if commitment.assignee.full_name %}
+                        <small class="text-muted ms-1">({{ commitment.assignee.full_name }})</small>
+                        {% endif %}
+                        {% else %}
+                        <span class="text-muted ms-1 fst-italic">Chưa phân công</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <strong>Mô tả:</strong>
+                    <p class="mt-1">{{ commitment.description or 'Không có mô tả.' }}</p>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="info-item">
+                            <i class="fas fa-calendar me-2"></i>
+                            <strong>Ngày bắt đầu:</strong>
+                            {{ commitment.start_date.strftime('%d/%m/%Y %H:%M') }}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="info-item">
+                            <i class="fas fa-clock me-2"></i>
+                            <strong>Hạn hoàn thành:</strong>
+                            {{ commitment.deadline.strftime('%d/%m/%Y %H:%M') }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <div class="d-flex justify-content-between mb-2">
+                        <strong>Tiến độ (Tự động):</strong>
+                        <span class="text-primary fw-bold">{{ commitment.progress }}%</span>
+                    </div>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar bg-{{ 'success' if commitment.progress >= 100 else 'primary' }}"
+                             style="width: {{ commitment.progress }}%"></div>
+                    </div>
+                </div>
+
+                {% if commitment.status == 'Chờ admin duyệt' and commitment.submitter %}
+                <div class="alert alert-info mt-4 mb-0 py-2">
+                    <i class="fas fa-paper-plane me-2"></i><strong>Đã gửi Admin duyệt</strong>
+                    <br><small>Bởi <strong>{{ commitment.submitter.display_name() }}</strong> vào lúc {{ commitment.submitted_at.strftime('%d/%m/%Y %H:%M') }}</small>
+                </div>
+                {% endif %}
+
+                {% if commitment.reviewer %}
+                <div class="alert mt-3 mb-0 py-2 {% if commitment.status == 'Đã nghiệm thu' %}alert-success{% elif commitment.status == 'Yêu cầu sửa đổi' %}alert-warning{% else %}alert-danger{% endif %}">
+                    <i class="fas fa-gavel me-2"></i><strong>Quyết định từ Admin: {{ commitment.status }}</strong>
+                    <br><small>Ban hành bởi <strong>{{ commitment.reviewer.display_name() }}</strong> lúc {{ commitment.reviewed_at.strftime('%d/%m/%Y %H:%M') }}</small>
+                    {% if commitment.admin_review_note %}
+                    <hr class="my-2">
+                    <p class="mb-0 small"><strong>Nhận xét:</strong> {{ commitment.admin_review_note }}</p>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            <div class="card-footer d-flex gap-2 flex-wrap">
+                {% if can_manage_ei %}
+                    {% if commitment.status != 'Chờ admin duyệt' %}
+                    <form action="{{ url_for('commitment_submit', commitment_id=commitment.id) }}"
+                          method="POST" class="d-inline"
+                          onsubmit="return confirm('Bạn có chắc chắn muốn gửi cam kết này cho Admin duyệt? Kiểm tra kỹ các hạng mục trước khi gửi.');">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-warning text-dark fw-bold">
+                            <i class="fas fa-paper-plane me-2"></i>Gửi Admin Duyệt
+                        </button>
+                    </form>
+                    {% else %}
+                    <button type="button" class="btn btn-outline-secondary" disabled>
+                        <i class="fas fa-paper-plane me-2"></i>Đã Gửi Duyệt
+                    </button>
+                    {% endif %}
+                {% endif %}
+
+                {% if current_user.is_admin() %}
+                    {% if commitment.status == 'Chờ admin duyệt' %}
+                    <a href="{{ url_for('commitment_admin_review', commitment_id=commitment.id) }}"
+                       class="btn btn-success text-dark fw-bold">
+                        <i class="fas fa-gavel me-2"></i>Kiểm duyệt Cam kết
+                    </a>
+                    {% endif %}
+
+                <a href="{{ url_for('commitments_edit', commitment_id=commitment.id) }}"
+                   class="btn btn-primary">
+                    <i class="fas fa-edit me-2"></i>Chỉnh sửa
+                </a>
+                <form action="{{ url_for('commitments_delete', commitment_id=commitment.id) }}"
+                      method="POST" class="d-inline"
+                      onsubmit="return confirm('Xóa cam kết này? Hành động không thể hoàn tác.');">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash me-2"></i>Xóa
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- ───────── Execution Items ───────── -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-tasks me-2"></i>Hạng mục thực hiện
+                    <span class="badge bg-secondary ms-2">{{ items|length }}</span>
+                </h5>
+                {% if can_manage_ei %}
+                <a href="{{ url_for('ei_create', commitment_id=commitment.id) }}"
+                   class="btn btn-sm btn-success">
+                    <i class="fas fa-plus me-1"></i>Thêm hạng mục
+                </a>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                {% if items %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:40px;">#</th>
+                                <th>Tiêu đề</th>
+                                <th>Trạng thái</th>
+                                <th>Đến hạn</th>
+                                <th>Trọng số</th>
+                                <th>Giao cho</th>
+                                <th>Cờ</th>
+                                <th>Cập nhật gần nhất</th>
+                                {% if can_update_ei %}<th></th>{% endif %}
+                                {% if can_manage_ei %}<th></th>{% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                            <tr {% if item.is_overdue() %}class="table-warning"{% endif %}>
+                                <td class="text-muted text-center fw-bold">{{ item.order_no }}</td>
+                                <td>
+                                    <strong>{{ item.title }}</strong>
+                                    {% if item.description %}
+                                    <br><small class="text-muted">
+                                        {{ item.description[:80] }}{% if item.description|length > 80 %}…{% endif %}
+                                    </small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-{{ item.get_status_color() }}">
+                                        {{ item.get_status_label() }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if item.due_date %}
+                                    <small {% if item.is_overdue() %}class="text-danger fw-bold"{% endif %}>
+                                        {{ item.due_date.strftime('%d/%m/%Y') }}
+                                    </small>
+                                    {% else %}<span class="text-muted">—</span>{% endif %}
+                                </td>
+                                <td class="text-center">{{ item.weight }}</td>
+                                <td>
+                                    {% if item.assignee %}
+                                    <span class="badge bg-info">{{ item.assignee.display_name() }}</span>
+                                    {% if item.assignee.full_name %}
+                                    <br><small class="text-muted">@{{ item.assignee.username }}</small>
+                                    {% endif %}
+                                    {% else %}
+                                    <span class="text-muted fst-italic">Chưa phân</span>
+                                    {% endif %}
+                                    {% if can_manage_ei and False %}
+                                    <!-- Disabling inline form since we now use the dedicated reassign button -->
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.requires_evidence %}
+                                    <span class="badge bg-secondary" title="Yeu cau bang chung">
+                                        <i class="fas fa-paperclip"></i>
+                                    </span>
+                                    {% endif %}
+                                    {% if item.requires_approval %}
+                                    <span class="badge bg-secondary" title="Yeu cau phe duyet">
+                                        <i class="fas fa-check-circle"></i>
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% set lu = item.latest_update() %}
+                                    {% if lu %}
+                                    <span class="badge bg-{{ lu.get_status_color() }}">
+                                        {{ lu.get_status_label() }}
+                                    </span>
+                                    <br><small class="text-muted">{{ lu.created_at.strftime('%d/%m %H:%M') }}</small>
+                                    {% if lu.updated_by %}
+                                    <br><small class="text-muted">@{{ lu.updated_by.username }}</small>
+                                    {% endif %}
+                                    {% else %}
+                                    <span class="text-muted fst-italic">Chua co</span>
+                                    {% endif %}
+                                </td>
+                                {% if can_update_ei and
+                                      (current_user.is_admin() or
+                                       current_user.is_lab_manager_of(commitment.lab_id) or
+                                       item.assigned_to == current_user.id) %}
+                                <td>
+                                    <a href="{{ url_for('ei_update', item_id=item.id) }}"
+                                       class="btn btn-sm btn-outline-primary" title="Cap nhat tien do">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                </td>
+                                {% elif can_update_ei %}
+                                <td></td>
+                                {% endif %}
+                                {% if can_manage_ei %}
+                                <td class="text-end text-nowrap">
+                                    {% if item.status == 'pending_review' %}
+                                    <a href="{{ url_for('ei_review', item_id=item.id) }}"
+                                       class="btn btn-sm btn-warning mb-1 w-100" title="Đánh giá kết quả">
+                                        <i class="fas fa-check-double text-dark me-1"></i><span class="text-dark">Đánh giá</span>
+                                    </a>
+                                    {% endif %}
+                                    <div class="d-flex gap-1 justify-content-end">
+                                        <a href="{{ url_for('ei_reassign', item_id=item.id) }}"
+                                           class="btn btn-sm btn-outline-info" title="Phân công lại">
+                                            <i class="fas fa-users-cog"></i>
+                                        </a>
+                                        <a href="{{ url_for('ei_edit', item_id=item.id) }}"
+                                           class="btn btn-sm btn-outline-warning" title="Sửa">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <form action="{{ url_for('ei_delete', item_id=item.id) }}"
+                                              method="POST" class="d-inline"
+                                              onsubmit="return confirm('Xóa hạng mục &quot;{{ item.title }}&quot;?');">
+                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Xóa">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-muted">
+                    <i class="fas fa-tasks fa-2x mb-2 d-block"></i>
+                    Chưa có hạng mục nào.
+                    {% if can_manage_ei %}
+                    <br>
+                    <a href="{{ url_for('ei_create', commitment_id=commitment.id) }}"
+                       class="btn btn-sm btn-success mt-2">
+                        <i class="fas fa-plus me-1"></i>Thêm hạng mục đầu tiên
+                    </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-history me-2"></i>Lịch sử tiến độ dự án <span class="badge bg-secondary">Legacy</span>
+                </h5>
+                <small class="text-muted mt-2 d-block">
+                    <i>Ghi chú: Lịch sử bên dưới thuộc về quy trình cũ và không thể hiện cập nhật của các Hạng mục. Xem lịch sử chi tiết cho từng Hạng mục trên bảng <strong>Hạng mục thực hiện</strong>.</i>
+                </small>
+            </div>
+            <div class="card-body">
+                {% if updates %}
+                <div class="timeline">
+                    {% for update in updates %}
+                    <div class="timeline-item">
+                        <div class="timeline-marker bg-{{ 'success' if update.progress >= commitment.progress else 'primary' }}"></div>
+                        <div class="timeline-content">
+                            <div class="d-flex justify-content-between">
+                                <strong>{{ update.progress }}%</strong>
+                                <small class="text-muted">{{ update.created_at.strftime('%d/%m/%Y %H:%M') }}</small>
+                            </div>
+                            <p class="mb-1">{{ update.notes or 'Không có ghi chú' }}</p>
+                            <small class="text-muted">
+                                <i class="fas fa-user me-1"></i>{{ update.creator.username }}
+                            </small>
+                            {% if update.attachment %}
+                            <div class="mt-2">
+                                <a href="{{ url_for('download_file', filename=update.attachment) }}"
+                                   class="btn btn-outline-secondary btn-sm"
+                                   title="Tải xuống tệp đính kèm">
+                                    <i class="fas fa-paperclip me-1"></i>{{ update.attachment.split('_', 1)[1] if '_' in update.attachment else update.attachment }}
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-center text-muted">
+                    <i class="fas fa-inbox fa-2x mb-2"></i><br>
+                    Chưa có cập nhật nào
+                </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-pie me-2"></i>Thống kê
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="stat-mini">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Ngày tạo:</span>
+                        <strong>{{ commitment.created_at.strftime('%d/%m/%Y') }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Cập nhật lần cuối:</span>
+                        <strong>{{ commitment.updated_at.strftime('%d/%m/%Y') }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>Số lần cập nhật:</span>
+                        <strong>{{ updates|length }}</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-line me-2"></i>Biểu đồ tiến độ gốc <span class="badge bg-secondary">Legacy</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="timelineChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    fetch(`/api/commitments/{{ commitment.id }}/timeline`)
+        .then(response => response.json())
+        .then(data => {
+            const ctx = document.getElementById('timelineChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.map(d => new Date(d.date).toLocaleDateString('vi-VN')),
+                    datasets: [{
+                        label: 'Tiến độ (%)',
+                        data: data.map(d => d.progress),
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, max: 100 }
+                    }
+                }
+            });
+        });
+});
+</script>
+{% endblock %}

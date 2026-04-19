@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Báo cáo - PTIT{% endblock %}
+
+{% block content %}
+<h1 class="page-title">
+    <i class="fas fa-file-alt me-3"></i>Báo cáo & Thống kê
+</h1>
+
+<!-- Export Button -->
+<div class="mb-3 text-end">
+    <a href="{{ url_for('export_report_pdf') }}" class="btn btn-danger btn-lg shadow-sm">
+        <i class="fas fa-file-pdf me-2"></i>Xuất báo cáo PDF
+    </a>
+</div>
+
+<!-- Overall Stats -->
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="stat-card stat-total">
+            <div class="stat-icon"><i class="fas fa-handshake"></i></div>
+            <div class="stat-info">
+                <h3>{{ total }}</h3>
+                <p>Tổng cam kết</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card stat-completed">
+            <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+            <div class="stat-info">
+                <h3>{{ completed }}</h3>
+                <p>Hoàn thành</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card stat-active">
+            <div class="stat-icon"><i class="fas fa-percentage"></i></div>
+            <div class="stat-info">
+                <h3>{{ "%.1f"|format(completion_rate) }}%</h3>
+                <p>Tỷ lệ hoàn thành</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="chart-card">
+            <h5 class="chart-title">
+                <i class="fas fa-chart-pie me-2"></i>Phân bố theo trạng thái
+            </h5>
+            <canvas id="statusChart"></canvas>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="chart-card">
+            <h5 class="chart-title">
+                <i class="fas fa-chart-bar me-2"></i>Tỷ lệ hoàn thành theo Lab
+            </h5>
+            <canvas id="labChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Lab Details Table -->
+<div class="chart-card">
+    <h5 class="chart-title">
+        <i class="fas fa-table me-2"></i>Chi tiết theo Lab
+    </h5>
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>STT</th>
+                    <th>Tên Lab</th>
+                    <th>Tổng cam kết</th>
+                    <th>Hoàn thành</th>
+                    <th>Quá hạn</th>
+                    <th>Tỷ lệ</th>
+                    <th>Tiến độ</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for lab in lab_data %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td><strong>{{ lab.name }}</strong></td>
+                    <td>{{ lab.total }}</td>
+                    <td><span class="badge bg-success">{{ lab.completed }}</span></td>
+                    <td><span class="badge bg-danger">{{ lab.overdue }}</span></td>
+                    <td>
+                        {% if lab.total > 0 %}
+                        <span class="badge bg-{{ 'success' if lab.rate >= 80 else 'warning' }}">
+                            {{ "%.1f"|format(lab.rate) }}%
+                        </span>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td style="min-width: 120px;">
+                        <div class="progress">
+                            <div class="progress-bar bg-primary" style="width: {{ lab.rate }}%"></div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Status Pie Chart
+    const statusCtx = document.getElementById('statusChart').getContext('2d');
+    new Chart(statusCtx, {
+        type: 'pie',
+        data: {
+            labels: {{ chart_labels | tojson }},
+            datasets: [{
+                data: {{ chart_data | tojson }},
+                backgroundColor: ['#6c757d', '#0d6efd', '#198754', '#dc3545'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+
+    // Lab Bar Chart
+    const labCtx = document.getElementById('labChart').getContext('2d');
+    new Chart(labCtx, {
+        type: 'bar',
+        data: {
+            labels: {{ lab_data | map(attribute='name') | list | tojson }},
+            datasets: [{
+                label: 'Tỷ lệ hoàn thành (%)',
+                data: {{ lab_data | map(attribute='rate') | list | tojson }},
+                backgroundColor: '#0d6efd',
+                borderRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, max: 100 }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

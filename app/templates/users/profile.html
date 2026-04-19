@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Hồ sơ cá nhân - PTIT{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-user-circle me-2"></i>Hồ sơ cá nhân
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-4">
+                    <div class="avatar-circle mx-auto mb-3">
+                        <i class="fas fa-user fa-3x"></i>
+                    </div>
+                    <h4>{{ current_user.username }}</h4>
+                    {% if current_user.full_name %}
+                    <p class="text-muted mb-1">{{ current_user.full_name }}</p>
+                    {% endif %}
+                    {% if current_user.is_admin() %}
+                    <span class="badge bg-warning text-dark">Quản trị viên</span>
+                    {% else %}
+                    {% set mem = current_user.get_lab_membership() %}
+                    {% if mem and mem.role_in_lab == 'manager' %}
+                    <span class="badge bg-primary">Quản lý Lab</span>
+                    {% elif mem %}
+                    <span class="badge bg-info">Thành viên Lab</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Chưa thuộc Lab nào</span>
+                    {% endif %}
+                    {% endif %}
+                </div>
+
+                <!-- Email -->
+                <div class="mb-3">
+                    <label class="form-label text-muted">Email</label>
+                    <p class="mb-0 fw-medium">
+                        {% if current_user.email %}
+                        <i class="fas fa-envelope me-1 text-muted"></i>{{ current_user.email }}
+                        {% else %}
+                        <span class="text-muted fst-italic">Chưa có email</span>
+                        {% endif %}
+                    </p>
+                </div>
+
+                <!-- Lab membership -->
+                <div class="mb-3">
+                    <label class="form-label text-muted">Lab</label>
+                    <p class="mb-0 fw-medium">
+                        {% if current_user.lab %}
+                        <i class="fas fa-flask me-1"></i>{{ current_user.lab.name }}
+                        {% else %}
+                        <span class="text-muted">Không thuộc Lab nào</span>
+                        {% endif %}
+                    </p>
+                </div>
+
+                <!-- System role -->
+                <div class="mb-3">
+                    <label class="form-label text-muted">Vai trò hệ thống</label>
+                    <p class="mb-0 fw-medium">
+                        {% if current_user.is_admin() %}
+                        Quản trị viên hệ thống
+                        {% else %}
+                        Người dùng
+                        {% endif %}
+                    </p>
+                </div>
+
+                <!-- Lab role (from membership) -->
+                {% if not current_user.is_admin() %}
+                {% set mem = current_user.get_lab_membership() %}
+                {% if mem %}
+                <div class="mb-3">
+                    <label class="form-label text-muted">Vai trò trong Lab</label>
+                    <p class="mb-0 fw-medium">
+                        {% if mem.role_in_lab == 'manager' %}
+                        <span class="badge bg-primary">Quản lý</span>
+                        {% else %}
+                        <span class="badge bg-info">Thành viên</span>
+                        {% endif %}
+                    </p>
+                </div>
+                {% endif %}
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-key me-2"></i>Đổi mật khẩu
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+                    <div class="mb-3">
+                        <label for="current_password" class="form-label">Mật khẩu hiện tại</label>
+                        <input type="password" class="form-control" id="current_password"
+                               name="current_password" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="new_password" class="form-label">Mật khẩu mới</label>
+                        <input type="password" class="form-control" id="new_password"
+                               name="new_password" placeholder="Ít nhất 6 ký tự">
+                        <small class="form-text text-muted">Để trống nếu không muốn thay đổi mật khẩu</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="confirm_password" class="form-label">Xác nhận mật khẩu mới</label>
+                        <input type="password" class="form-control" id="confirm_password"
+                               name="confirm_password" placeholder="Nhập lại mật khẩu mới">
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>Lưu thay đổi
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

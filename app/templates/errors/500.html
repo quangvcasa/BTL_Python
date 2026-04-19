@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}500 - Lỗi Server{% endblock %}
+{% block content %}
+<div class="error-page">
+    <i class="fas fa-exclamation-triangle"></i>
+    <h1>500</h1>
+    <p>Đã xảy ra lỗi server. Vui lòng thử lại sau.</p>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+        <i class="fas fa-home me-2"></i>Quay về Dashboard
+    </a>
+</div>
+{% endblock %}

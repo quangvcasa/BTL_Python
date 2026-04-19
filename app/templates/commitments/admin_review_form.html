@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Kiểm duyệt Cam kết – {{ commitment.title }} - PTIT{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('commitments_list') }}">Cam kết</a></li>
+        <li class="breadcrumb-item">
+            <a href="{{ url_for('commitments_detail', commitment_id=commitment.id) }}">
+                {{ commitment.code }} – {{ commitment.title }}
+            </a>
+        </li>
+        <li class="breadcrumb-item active">Kiểm duyệt Cam kết</li>
+    </ol>
+</nav>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+
+        <!-- Commitment Summary -->
+        <div class="card mb-3 border-0 bg-light">
+            <div class="card-body py-2 px-3">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <span class="fw-bold">{{ commitment.title }}</span>
+                        <small class="text-muted ms-2">
+                            <i class="fas fa-sitemap me-1"></i>Lab: {{ commitment.lab.name }}
+                        </small>
+                    </div>
+                    <span class="badge bg-{{ commitment.get_status_color() }} fs-6">
+                        {{ commitment.status }}
+                    </span>
+                </div>
+                <div class="mt-2 text-muted small">
+                    <i class="fas fa-clock me-1"></i>Hạn hoàn thành: {{ commitment.deadline.strftime('%d/%m/%Y %H:%M') }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Review Form -->
+        <div class="card shadow-sm border-primary">
+            <div class="card-header bg-primary text-white py-3">
+                <h5 class="mb-0">
+                    <i class="fas fa-gavel me-2"></i>Quyết định Kiểm duyệt (Admin)
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="adminReviewForm">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+                    <!-- Decision -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            Kết quả kiểm duyệt <span class="text-danger">*</span>
+                        </label>
+                        <div class="d-flex flex-column gap-2" id="decisionRadioGroup">
+                            <div class="form-check p-0 mb-1">
+                                <input type="radio" class="btn-check" name="decision"
+                                       id="decision_approved" value="Đã nghiệm thu" autocomplete="off">
+                                <label class="btn btn-outline-success w-100 text-start" for="decision_approved">
+                                    <i class="fas fa-award me-2"></i><strong>Nghiệm thu (Hoàn thành)</strong><br>
+                                    <small class="fw-normal">Toàn bộ hạng mục đạt yêu cầu, đóng cam kết.</small>
+                                </label>
+                            </div>
+                            <div class="form-check p-0 mb-1">
+                                <input type="radio" class="btn-check" name="decision"
+                                       id="decision_needs_revision" value="Yêu cầu sửa đổi" autocomplete="off">
+                                <label class="btn btn-outline-warning w-100 text-start text-dark" for="decision_needs_revision">
+                                    <i class="fas fa-undo-alt me-2"></i><strong>Yêu cầu Lab rà soát lại</strong><br>
+                                    <small class="fw-normal">Cam kết cần được sửa chữa hoặc phát triển thêm.</small>
+                                </label>
+                            </div>
+                            <div class="form-check p-0 mb-1">
+                                <input type="radio" class="btn-check" name="decision"
+                                       id="decision_rejected" value="Từ chối" autocomplete="off">
+                                <label class="btn btn-outline-danger w-100 text-start" for="decision_rejected">
+                                    <i class="fas fa-ban me-2"></i><strong>Từ chối hoàn toàn</strong><br>
+                                    <small class="fw-normal">Huỷ bỏ kết quả cam kết.</small>
+                                </label>
+                            </div>
+                        </div>
+                        <div id="decisionError" class="text-danger small mt-1" style="display:none;">
+                            Vui lòng chọn quyết định kiểm duyệt.
+                        </div>
+                    </div>
+
+                    <!-- Note -->
+                    <div class="mb-4" id="noteSection">
+                        <label for="review_note" class="form-label fw-bold">
+                            Nhận xét / Ý kiến phản hồi <span class="text-danger" id="noteAsterisk" style="display:none;">*</span>
+                        </label>
+                        <textarea class="form-control" id="review_note" name="review_note" rows="5"
+                                  placeholder="Ghi rõ lý do nghiệm thu, hoặc chi tiết các lỗi yêu cầu Lab phải sửa..."></textarea>
+                        <div class="form-text text-warning" id="noteHint" style="display:none;">
+                            Bắt buộc ghi rõ lý do.
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{{ url_for('commitments_detail', commitment_id=commitment.id) }}"
+                           class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Quay lại
+                        </a>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <i class="fas fa-save me-2"></i>Lưu quyết định
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const radios      = document.querySelectorAll('input[name="decision"]');
+    const decisionError = document.getElementById('decisionError');
+    const noteField   = document.getElementById('review_note');
+    const noteHint    = document.getElementById('noteHint');
+    const noteAsterisk= document.getElementById('noteAsterisk');
+    const form        = document.getElementById('adminReviewForm');
+
+    function getSelected() {
+        for (const r of radios) { if (r.checked) return r.value; }
+        return '';
+    }
+
+    function toggleNoteRequired() {
+        const val = getSelected();
+        // if choice is needs_revision or rejected
+        const needsNote = (val === 'Yêu cầu sửa đổi' || val === 'Từ chối');
+        noteField.required = needsNote;
+        if(needsNote) {
+            noteHint.style.display = 'block';
+            noteAsterisk.style.display = 'inline';
+        } else {
+            noteHint.style.display = 'none';
+            noteAsterisk.style.display = 'none';
+        }
+    }
+
+    radios.forEach(r => r.addEventListener('change', toggleNoteRequired));
+    toggleNoteRequired();  // init on load
+
+    form.addEventListener('submit', function (e) {
+        if (!getSelected()) {
+            decisionError.style.display = 'block';
+            e.preventDefault();
+        } else {
+            decisionError.style.display = 'none';
+        }
+    });
+});
+</script>
+{% endblock %}

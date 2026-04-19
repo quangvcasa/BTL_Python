@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block title %}{{ action }} – {{ commitment.code }} - PTIT{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('commitments_list') }}">Cam kết</a></li>
+        <li class="breadcrumb-item">
+            <a href="{{ url_for('commitments_detail', commitment_id=commitment.id) }}">
+                {{ commitment.code }} – {{ commitment.title }}
+            </a>
+        </li>
+        <li class="breadcrumb-item active">{{ action }}</li>
+    </ol>
+</nav>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-tasks me-2"></i>{{ action }}
+                </h5>
+                <small class="text-muted">
+                    Cam kết: <strong>{{ commitment.code }}</strong> –
+                    Hạn cam kết: <strong>{{ commitment.deadline.strftime('%d/%m/%Y') }}</strong>
+                    <span class="badge bg-{{ commitment.get_status_color() }} ms-2">{{ commitment.status }}</span>
+                </small>
+            </div>
+
+            <div class="card-body">
+                <form method="POST" id="eiForm">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+                    <!-- Row 1: Order + Title -->
+                    <div class="row">
+                        <div class="col-md-2 mb-3">
+                            <label for="order_no" class="form-label">Thứ tự</label>
+                            <input type="number" class="form-control" id="order_no" name="order_no"
+                                   value="{{ item.order_no if item else 0 }}" min="0">
+                        </div>
+                        <div class="col-md-10 mb-3">
+                            <label for="title" class="form-label">
+                                Tiêu đề <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" id="title" name="title"
+                                   value="{{ item.title if item else '' }}" required>
+                        </div>
+                    </div>
+
+                    <!-- Description -->
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Mô tả / Yêu cầu</label>
+                        <textarea class="form-control" id="description" name="description"
+                                  rows="3">{{ item.description if item else '' }}</textarea>
+                    </div>
+
+                    <!-- Row 2: Status (edit only) + Weight + Assignee -->
+                    <div class="row">
+                        {% if item %}
+                        <div class="col-md-4 mb-3">
+                            <label for="status" class="form-label">Trạng thái</label>
+                            <select class="form-select" id="status" name="status">
+                                {% for val, label in ei_statuses.items() %}
+                                <option value="{{ val }}"
+                                    {% if item.status == val %}selected{% endif %}>
+                                    {{ label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+                        <div class="col-md-{% if item %}4{% else %}6{% endif %} mb-3">
+                            <label for="weight" class="form-label">
+                                Trọng số
+                                <small class="text-muted">(mặc định 1.0)</small>
+                            </label>
+                            <input type="number" class="form-control" id="weight" name="weight"
+                                   value="{{ item.weight if item else 1.0 }}"
+                                   step="0.1" min="0.1">
+                        </div>
+                        <div class="col-md-{% if item %}4{% else %}6{% endif %} mb-3">
+                            <label for="assigned_to" class="form-label">
+                                Giao cho
+                                <small class="text-muted">(thuộc Lab {{ commitment.lab.name }})</small>
+                            </label>
+                            <select class="form-select" id="assigned_to" name="assigned_to">
+                                <option value="">-- Chưa phân công --</option>
+                                {% for member in lab_members %}
+                                <option value="{{ member.id }}"
+                                    {% if item and item.assigned_to == member.id %}selected{% endif %}>
+                                    {% if member.full_name %}
+                                    {{ member.full_name }} (@{{ member.username }})
+                                    {% else %}
+                                    {{ member.username }}
+                                    {% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            {% if not lab_members %}
+                            <div class="form-text text-warning">
+                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                Lab này chưa có thành viên nào.
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Row 3: Dates -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="start_date" class="form-label">Ngày bắt đầu</label>
+                            <input type="datetime-local" class="form-control" id="start_date" name="start_date"
+                                   value="{{ item.start_date.strftime('%Y-%m-%dT%H:%M') if item and item.start_date else '' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="due_date" class="form-label">Ngày đến hạn</label>
+                            <input type="datetime-local" class="form-control" id="due_date" name="due_date"
+                                   value="{{ item.due_date.strftime('%Y-%m-%dT%H:%M') if item and item.due_date else '' }}"
+                                   max="{{ commitment.deadline.strftime('%Y-%m-%dT%H:%M') }}">
+                            <div id="dateError" class="text-danger small mt-1" style="display:none;">
+                                Ngày đến hạn phải sau ngày bắt đầu và
+                                không vượt quá {{ commitment.deadline.strftime('%d/%m/%Y') }}.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 4: Feature flags -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="requires_evidence"
+                                       name="requires_evidence" value="1"
+                                       {% if item and item.requires_evidence %}checked{% endif %}>
+                                <label class="form-check-label" for="requires_evidence">
+                                    <i class="fas fa-paperclip me-1 text-muted"></i>
+                                    Yêu cầu bằng chứng nộp lên
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="requires_approval"
+                                       name="requires_approval" value="1"
+                                       {% if item and item.requires_approval %}checked{% endif %}>
+                                <label class="form-check-label" for="requires_approval">
+                                    <i class="fas fa-check-circle me-1 text-muted"></i>
+                                    Yêu cầu phê duyệt trước khi hoàn thành
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('commitments_detail', commitment_id=commitment.id) }}"
+                           class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Quay lại
+                        </a>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <i class="fas fa-save me-2"></i>Lưu hạng mục
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const startInput = document.getElementById('start_date');
+    const dueInput   = document.getElementById('due_date');
+    const dateError  = document.getElementById('dateError');
+    const submitBtn  = document.getElementById('submitBtn');
+    const maxDue     = new Date('{{ commitment.deadline.strftime("%Y-%m-%dT%H:%M") }}');
+
+    function validate() {
+        // Only block submit if BOTH dates are filled and invalid
+        let ok = true;
+        if (startInput.value && dueInput.value) {
+            const s = new Date(startInput.value);
+            const d = new Date(dueInput.value);
+            if (d <= s || d > maxDue) ok = false;
+        }
+        dateError.style.display = ok ? 'none' : 'block';
+        submitBtn.disabled = !ok;
+        return ok;
+    }
+
+    startInput.addEventListener('change', validate);
+    dueInput.addEventListener('change', validate);
+
+    document.getElementById('eiForm').addEventListener('submit', function (e) {
+        if (!validate()) e.preventDefault();
+    });
+});
+</script>
+{% endblock %}

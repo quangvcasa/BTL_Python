@@ -1,0 +1,7 @@
+Flask
+Flask-Bcrypt
+Flask-Login
+Pillow
+Flask-SQLAlchemy
+Flask-Migrate
+python-dotenv

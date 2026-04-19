@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - PTIT{% endblock %}
+
+{% block content %}
+<h1 class="page-title">
+    <i class="fas fa-chart-line me-3"></i>Dashboard
+    {% if not current_user.is_admin() and current_user.lab %}
+    <small class="text-muted">| {{ current_user.lab.name }}</small>
+    {% endif %}
+</h1>
+
+{% if role_view == 'admin' %}
+    <!-- ADMIN VIEW -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-6 col-xl-3">
+            <div class="stat-card stat-total">
+                <div class="stat-icon"><i class="fas fa-handshake"></i></div>
+                <div class="stat-info">
+                    <h3>{{ total }}</h3>
+                    <p>Tổng Cam Kết</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+            <div class="stat-card" style="border-left-color: var(--bs-warning);">
+                <div class="stat-icon text-warning"><i class="fas fa-search"></i></div>
+                <div class="stat-info">
+                    <h3>{{ pending_review }}</h3>
+                    <p>Chờ Admin Duyệt</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+            <div class="stat-card stat-overdue">
+                <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                <div class="stat-info">
+                    <h3>{{ overdue }}</h3>
+                    <p>Cam kết Quá Hạn</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+            <div class="stat-card" style="border-left-color: var(--bs-danger);">
+                <div class="stat-icon text-danger"><i class="fas fa-undo-alt"></i></div>
+                <div class="stat-info">
+                    <h3>{{ needs_revision }}</h3>
+                    <p>Yêu cầu Sửa đổi</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl-2">
+            <div class="stat-card" style="border-left-color: var(--bs-info);">
+                <div class="stat-icon text-info"><i class="fas fa-tasks"></i></div>
+                <div class="stat-info">
+                    <h3>{{ total_execution_items }}</h3>
+                    <p>Tổng Hạng Mục</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6">
+            <div class="chart-card">
+                <h5 class="chart-title"><i class="fas fa-chart-pie me-2"></i>Phân bố Trạng thái</h5>
+                <canvas id="statusChart"></canvas>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="chart-card">
+                <h5 class="chart-title"><i class="fas fa-chart-bar me-2"></i>Cam kết theo Lab</h5>
+                <canvas id="labChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Commitments (Admin) -->
+    <div class="chart-card">
+        <h5 class="chart-title"><i class="fas fa-history me-2"></i>Cam kết Mới Cập nhật</h5>
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Mã</th>
+                        <th>Tiêu đề</th>
+                        <th>Lab</th>
+                        <th>Trạng thái</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for commit in recent %}
+                    <tr>
+                        <td><code>{{ commit.code }}</code></td>
+                        <td>{{ commit.title }}</td>
+                        <td><span class="badge bg-lab">{{ commit.lab.name }}</span></td>
+                        <td><span class="badge bg-{{ commit.get_status_color() }}">{{ commit.status }}</span></td>
+                        <td>
+                            <a href="{{ url_for('commitments_detail', commitment_id=commit.id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i></a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" class="text-center text-muted">Chưa có cam kết nào</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+{% elif role_view == 'manager' %}
+    <!-- MANAGER VIEW -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-6 col-xl-3">
+            <div class="stat-card stat-total">
+                <div class="stat-icon"><i class="fas fa-handshake"></i></div>
+                <div class="stat-info">
+                    <h3>{{ total }}</h3>
+                    <p>Tổng Cam Kết (Lab)</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+            <div class="stat-card" style="border-left-color: var(--bs-warning);">
+                <div class="stat-icon text-warning"><i class="fas fa-tasks"></i></div>
+                <div class="stat-info">
+                    <h3>{{ ei_pending_review }}</h3>
+                    <p>Hạng Mục Chờ Duyệt</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+            <div class="stat-card stat-overdue">
+                <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                <div class="stat-info">
+                    <h3>{{ ei_overdue }}</h3>
+                    <p>Hạng Mục Trễ Hạn</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+            <div class="stat-card" style="border-left-color: var(--bs-danger);">
+                <div class="stat-icon text-danger"><i class="fas fa-undo"></i></div>
+                <div class="stat-info">
+                    <h3>{{ ei_needs_revision }}</h3>
+                    <p>Hạng Mục Cần Sửa</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+            <div class="stat-card" style="border-left-color: var(--bs-success);">
+                <div class="stat-icon text-success"><i class="fas fa-paper-plane"></i></div>
+                <div class="stat-info">
+                    <h3>{{ waiting_submit }}</h3>
+                    <p>Chưa Nộp Lên Admin</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manager Attention Table -->
+    <div class="card shadow-sm border-0 mt-2">
+        <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 text-primary"><i class="fas fa-clipboard-check me-2"></i>Cần Đánh Giá Gấp</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Cam kết</th>
+                            <th>Hạng mục</th>
+                            <th>Người phụ trách</th>
+                            <th>Cập nhật gần nhất</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ei in recent_pending_items %}
+                        <tr>
+                            <td><small class="text-muted">{{ ei.commitment.title }}</small></td>
+                            <td><strong>{{ ei.title }}</strong></td>
+                            <td><span class="badge bg-info">{{ ei.assignee.display_name() if ei.assignee else 'Trống' }}</span></td>
+                            <td>{{ ei.updated_at.strftime('%d/%m/%Y %H:%M') if ei.updated_at else '' }}</td>
+                            <td>
+                                <a href="{{ url_for('commitments_detail', commitment_id=ei.commitment_id) }}" class="btn btn-sm btn-outline-warning">Đánh giá</a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5" class="text-center py-4 text-muted">Tuyệt vời! Không có hạng mục nào chờ bạn đánh giá.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+{% elif role_view == 'member' %}
+    <!-- MEMBER VIEW -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-6 col-xl-3">
+            <div class="stat-card" style="border-left-color: var(--bs-secondary);">
+                <div class="stat-icon text-secondary"><i class="fas fa-th-list"></i></div>
+                <div class="stat-info">
+                    <h3>{{ my_total }}</h3>
+                    <p>Phân công cho bạn</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+            <div class="stat-card stat-active">
+                <div class="stat-icon"><i class="fas fa-spinner"></i></div>
+                <div class="stat-info">
+                    <h3>{{ my_active }}</h3>
+                    <p>Đang thực hiện (Của tôi)</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+            <div class="stat-card stat-overdue">
+                <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                <div class="stat-info">
+                    <h3>{{ my_overdue }}</h3>
+                    <p>Sắp tới hạn / Quá hạn</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+            <div class="stat-card" style="border-left-color: var(--bs-warning);">
+                <div class="stat-icon text-warning"><i class="fas fa-undo"></i></div>
+                <div class="stat-info">
+                    <h3>{{ my_revise }}</h3>
+                    <p>Yêu cầu sửa chữa lại</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Member Recent Items Table -->
+    <div class="card shadow-sm border-0 mt-2">
+        <div class="card-header bg-white py-3 border-bottom">
+            <h5 class="mb-0 text-primary"><i class="fas fa-tasks me-2"></i>Công việc của bạn</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Cam kết Gốc</th>
+                            <th>Hạng mục</th>
+                            <th>Đến hạn</th>
+                            <th>Trạng thái hiện tại</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ei in recent_my_items %}
+                        <tr>
+                            <td><small class="text-muted">{{ ei.commitment.title }}</small></td>
+                            <td><strong>{{ ei.title }}</strong></td>
+                            <td class="{% if ei.due_date and ei.due_date < today and ei.status not in ('Hoàn thành','Từ chối') %}text-danger fw-bold{% endif %}">
+                                {{ ei.due_date.strftime('%d/%m/%Y') if ei.due_date else 'Vô thời hạn' }}
+                            </td>
+                            <td><span class="badge bg-{{ ei.get_status_color() }}">{{ ei.get_status_label() }}</span></td>
+                            <td>
+                                <a href="{{ url_for('commitments_detail', commitment_id=ei.commitment_id) }}" class="btn btn-sm btn-primary">Xem</a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5" class="text-center py-4 text-muted">Bạn chưa được phân công nhận hạng mục nào.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    {% if role_view == 'admin' %}
+        // Status Chart
+        const statusCtx = document.getElementById('statusChart');
+        if (statusCtx) {
+            new Chart(statusCtx.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: {{ status_chart.labels | tojson }},
+                    datasets: [{
+                        data: {{ status_chart.data | tojson }},
+                        backgroundColor: ['#6c757d', '#0d6efd', '#198754', '#dc3545'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+        }
+
+        // Lab Chart
+        const labCtx = document.getElementById('labChart');
+        if (labCtx) {
+            new Chart(labCtx.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: {{ commitments_by_lab | map(attribute='name') | list | tojson }},
+                    datasets: [{
+                        label: 'Số cam kết',
+                        data: {{ commitments_by_lab | map(attribute='count') | list | tojson }},
+                        backgroundColor: '#0d6efd',
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                    }
+                }
+            });
+        }
+    {% endif %}
+});
+</script>
+{% endblock %}

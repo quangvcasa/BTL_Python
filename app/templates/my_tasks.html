@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Task của tôi - PTIT{% endblock %}
+
+{% block content %}
+<h1 class="page-title">
+    <i class="fas fa-tasks me-3"></i>Task của tôi
+</h1>
+
+<!-- Stats Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="stat-card stat-total">
+            <div class="stat-icon"><i class="fas fa-list"></i></div>
+            <div class="stat-info">
+                <h3>{{ total }}</h3>
+                <p>Tổng task</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card stat-active">
+            <div class="stat-icon"><i class="fas fa-spinner"></i></div>
+            <div class="stat-info">
+                <h3>{{ active }}</h3>
+                <p>Đang thực hiện</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card stat-completed">
+            <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+            <div class="stat-info">
+                <h3>{{ completed }}</h3>
+                <p>Hoàn thành</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Overdue Alert -->
+{% if overdue > 0 %}
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+    <i class="fas fa-exclamation-triangle me-2"></i>
+    Bạn có <strong>{{ overdue }} task quá hạn</strong> cần xử lý!
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<!-- Tasks Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>STT</th>
+                        <th>Tiêu đề</th>
+                        <th>Mô tả</th>
+                        <th>Tiến độ</th>
+                        <th>Hạn</th>
+                        <th>Trạng thái</th>
+                        <th>Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for task in my_tasks %}
+                    <tr class="{{ 'table-danger' if task.status == 'Quá hạn' else '' }}">
+                        <td>{{ loop.index }}</td>
+                        <td>
+                            <strong>{{ task.title }}</strong>
+                        </td>
+                        <td>{{ task.description[:50] }}{% if task.description|length > 50 %}...{% endif %}</td>
+                        <td style="min-width: 120px;">
+                            <div class="progress-wrapper">
+                                <div class="progress">
+                                    <div class="progress-bar bg-{{ 'success' if task.progress >= 100 else 'primary' }}"
+                                         style="width: {{ task.progress }}%">
+                                    </div>
+                                </div>
+                                <span class="progress-text">{{ task.progress }}%</span>
+                            </div>
+                        </td>
+                        <td>
+                            {% if task.deadline < today %}
+                            <span class="text-danger">
+                                <i class="fas fa-calendar-times me-1"></i>
+                                {{ task.deadline.strftime('%d/%m/%Y %H:%M:%S') }}
+                            </span>
+                            {% else %}
+                            {{ task.deadline.strftime('%d/%m/%Y %H:%M:%S') }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if task.status == 'Hoàn thành' %}
+                            <span class="badge bg-success">{{ task.status }}</span>
+                            {% elif task.status == 'Quá hạn' %}
+                            <span class="badge bg-danger">{{ task.status }}</span>
+                            {% elif task.status == 'Đang thực hiện' %}
+                            <span class="badge bg-primary">{{ task.status }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ task.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('commitments_detail', commitment_id=task.id) }}"
+                               class="btn btn-sm btn-outline-info">
+                                <i class="fas fa-eye"></i> Xem
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-5">
+                            <i class="fas fa-check-circle fa-4x mb-3 text-success"></i>
+                            <h4>Không có task nào được giao!</h4>
+                            <p>Bạn hiện không có task cụ thể nào được giao.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% if overdue > 0 %}
+<div class="mt-3 text-end">
+    <small class="text-danger">
+        <i class="fas fa-info-circle me-1"></i>
+        Hàng màu đỏ là task quá hạn cần ưu tiên xử lý.
+    </small>
+</div>
+{% endif %}
+{% endblock %}

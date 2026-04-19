@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Quản lý Labs{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="page-title">
+        <i class="fas fa-flask me-3"></i>Quản lý Labs
+    </h1>
+    <a href="{{ url_for('labs_create') }}" class="btn btn-primary">
+        <i class="fas fa-plus me-2"></i>Thêm Lab mới
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>STT</th>
+                        <th>Tên Lab</th>
+                        <th>Mô tả</th>
+                        <th>Quản lý</th>
+                        <th>Thành viên</th>
+                        <th>Cam kết</th>
+                        <th>Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for lab in labs %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td><strong>{{ lab.name }}</strong></td>
+                        <td>{{ lab.description or '—' }}</td>
+                        <td>
+                            {% if lab.manager %}
+                            <span class="badge bg-primary">
+                                <i class="fas fa-user-tie me-1"></i>{{ lab.manager.username }}
+                            </span>
+                            {% if lab.manager.email %}
+                            <br><small class="text-muted">{{ lab.manager.email }}</small>
+                            {% endif %}
+                            {% else %}
+                            <span class="text-muted fst-italic">Chưa có quản lý</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary">
+                                {{ lab.memberships.count() }} người
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge bg-info">{{ lab.commitments|length }} cam kết</span>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('labs_manage', lab_id=lab.id) }}"
+                               class="btn btn-sm btn-success" title="Quản lý thành viên">
+                                <i class="fas fa-users-cog"></i>
+                            </a>
+                            <a href="{{ url_for('labs_edit', lab_id=lab.id) }}"
+                               class="btn btn-sm btn-warning" title="Chỉnh sửa Lab">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            <form method="POST" action="{{ url_for('labs_delete', lab_id=lab.id) }}"
+                                  style="display: inline;"
+                                  onsubmit="return confirm('Bạn có chắc muốn xóa Lab &quot;{{ lab.name }}&quot;?\nHành động này sẽ xóa tất cả cam kết liên quan!');">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-danger" title="Xóa Lab">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            <i class="fas fa-flask fa-3x mb-3"></i>
+                            <p>Chưa có Lab nào. Tạo Lab đầu tiên!</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

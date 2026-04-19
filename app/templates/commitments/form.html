@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}{{ action }} - PTIT{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('commitments_list') }}">Cam kết</a></li>
+        <li class="breadcrumb-item active">{{ action }}</li>
+    </ol>
+</nav>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-handshake me-2"></i>{{ action }}
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="commitmentForm">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+                    <!-- Row 1: Code + Lab -->
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="code" class="form-label">
+                                Mã cam kết
+                                <small class="text-muted">(tự động nếu để trống)</small>
+                            </label>
+                            <input type="text" class="form-control font-monospace" id="code" name="code"
+                                   value="{{ commitment.code if commitment else '' }}"
+                                   placeholder="VD: CAM-0001">
+                        </div>
+                        <div class="col-md-8 mb-3">
+                            <label for="lab_id" class="form-label">
+                                Lab thực hiện <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select" id="lab_id" name="lab_id" required>
+                                <option value="">-- Chọn Lab --</option>
+                                {% for lab in labs %}
+                                <option value="{{ lab.id }}"
+                                    {% if commitment and commitment.lab_id == lab.id %}selected{% endif %}>
+                                    {{ lab.name }}
+                                    {% if lab.manager %}
+                                    (QL: {{ lab.manager.username }})
+                                    {% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Title -->
+                    <div class="mb-3">
+                        <label for="title" class="form-label">
+                            Tiêu đề cam kết <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="title" name="title"
+                               value="{{ commitment.title if commitment else '' }}" required>
+                    </div>
+
+                    <!-- Description -->
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Nội dung / Mô tả</label>
+                        <textarea class="form-control" id="description" name="description"
+                                  rows="4">{{ commitment.description if commitment else '' }}</textarea>
+                    </div>
+
+                    <!-- Row 2: Priority + Status (status read-only on edit) -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="priority" class="form-label">
+                                Mức độ ưu tiên <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select" id="priority" name="priority" required>
+                                {% set cur_priority = commitment.priority if commitment else 'Trung bình' %}
+                                <option value="Thấp"      {% if cur_priority == 'Thấp' %}selected{% endif %}>⬇ Thấp</option>
+                                <option value="Trung bình" {% if cur_priority == 'Trung bình' %}selected{% endif %}>➡ Trung bình</option>
+                                <option value="Cao"       {% if cur_priority == 'Cao' %}selected{% endif %}>⬆ Cao</option>
+                                <option value="Khẩn cấp"  {% if cur_priority == 'Khẩn cấp' %}selected{% endif %}>🚨 Khẩn cấp</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Trạng thái</label>
+                            {% if commitment %}
+                            <div class="form-control bg-light text-muted">
+                                <span class="badge bg-{{ commitment.get_status_color() }}">
+                                    {{ commitment.status }}
+                                </span>
+                                <small class="ms-2">(Cập nhật tự động)</small>
+                            </div>
+                            {% else %}
+                            <div class="form-control bg-light text-muted">
+                                <span class="badge bg-secondary">Mới</span>
+                                <small class="ms-2">(Tự động khi tạo)</small>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Row 3: Dates -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="start_date" class="form-label">
+                                Ngày bắt đầu <span class="text-danger">*</span>
+                            </label>
+                            <input type="datetime-local" class="form-control" id="start_date" name="start_date"
+                                   value="{{ commitment.start_date.strftime('%Y-%m-%dT%H:%M') if commitment else '' }}"
+                                   required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="deadline" class="form-label">
+                                Hạn hoàn thành <span class="text-danger">*</span>
+                            </label>
+                            <input type="datetime-local" class="form-control" id="deadline" name="deadline"
+                                   value="{{ commitment.deadline.strftime('%Y-%m-%dT%H:%M') if commitment else '' }}"
+                                   required>
+                            <div id="dateError" class="text-danger small mt-1" style="display:none;">
+                                Hạn hoàn thành phải sau ngày bắt đầu.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Note about execution-phase assignment -->
+                    <div class="alert alert-info py-2 mb-3">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Phân công thực hiện cụ thể sẽ được thực hiện sau khi cam kết được tạo,
+                        trong bước quản lý thực thi.
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('commitments_list') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Quay lại
+                        </a>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <i class="fas fa-save me-2"></i>Lưu Cam kết
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const startInput    = document.getElementById('start_date');
+    const deadlineInput = document.getElementById('deadline');
+    const dateError     = document.getElementById('dateError');
+    const submitBtn     = document.getElementById('submitBtn');
+
+    function validateDates() {
+        if (!startInput.value || !deadlineInput.value) return true;
+        const ok = new Date(deadlineInput.value) > new Date(startInput.value);
+        dateError.style.display = ok ? 'none' : 'block';
+        submitBtn.disabled = !ok;
+        return ok;
+    }
+
+    startInput.addEventListener('change', validateDates);
+    deadlineInput.addEventListener('change', validateDates);
+
+    document.getElementById('commitmentForm').addEventListener('submit', function (e) {
+        if (!validateDates()) e.preventDefault();
+    });
+});
+</script>
+{% endblock %}

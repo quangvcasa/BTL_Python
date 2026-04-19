@@ -1,0 +1,380 @@
+/* PTIT Lab Progress Management - Custom Styles */
+
+:root {
+    --ptit-blue: #1a4f9c;
+    --ptit-light-blue: #4a90d9;
+    --ptit-dark: #0d2b4d;
+}
+
+body {
+    background-color: #f5f7fa;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    min-height: 100vh;
+}
+
+.main-content {
+    padding-top: 80px;
+    padding-bottom: 40px;
+}
+
+/* Navbar */
+.navbar.bg-ptit {
+    background: linear-gradient(135deg, var(--ptit-dark) 0%, var(--ptit-blue) 100%);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.navbar-brand {
+    font-weight: 700;
+    font-size: 1.3rem;
+}
+
+.nav-link {
+    font-weight: 500;
+    transition: all 0.3s;
+}
+
+.nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 5px;
+}
+
+/* Login Page */
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--ptit-dark) 0%, var(--ptit-blue) 50%, var(--ptit-light-blue) 100%);
+}
+
+.login-card {
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.3);
+    width: 100%;
+    max-width: 400px;
+    padding: 40px;
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.login-logo {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, var(--ptit-blue), var(--ptit-light-blue));
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 15px;
+}
+
+.login-logo i {
+    font-size: 40px;
+    color: white;
+}
+
+.login-header h2 {
+    color: var(--ptit-blue);
+    font-weight: 700;
+    margin: 0;
+}
+
+.btn-login {
+    width: 100%;
+    padding: 12px;
+    font-weight: 600;
+    background: linear-gradient(135deg, var(--ptit-blue), var(--ptit-light-blue));
+    border: none;
+    transition: transform 0.2s;
+}
+
+.btn-login:hover {
+    transform: translateY(-2px);
+    background: linear-gradient(135deg, var(--ptit-dark), var(--ptit-blue));
+}
+
+.login-footer {
+    text-align: center;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+}
+
+/* Page Title */
+.page-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--ptit-dark);
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 3px solid var(--ptit-light-blue);
+}
+
+/* Stat Cards */
+.stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+.stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+}
+
+.stat-icon i {
+    color: white;
+}
+
+.stat-total .stat-icon {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+}
+
+.stat-active .stat-icon {
+    background: linear-gradient(135deg, #f093fb, #f5576c);
+}
+
+.stat-completed .stat-icon {
+    background: linear-gradient(135deg, #4facfe, #00f2fe);
+}
+
+.stat-overdue .stat-icon {
+    background: linear-gradient(135deg, #fa709a, #fee140);
+}
+
+.stat-info h3 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0;
+    color: #333;
+}
+
+.stat-info p {
+    margin: 0;
+    color: #777;
+    font-size: 0.9rem;
+}
+
+/* Chart Cards */
+.chart-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+}
+
+.chart-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--ptit-dark);
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #eee;
+}
+
+/* Tables */
+.table {
+    font-size: 0.95rem;
+}
+
+.table thead th {
+    background-color: var(--ptit-dark);
+    color: white;
+    font-weight: 600;
+    border: none;
+    padding: 15px;
+}
+
+.table tbody td {
+    vertical-align: middle;
+    padding: 12px 15px;
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(26, 79, 156, 0.05);
+}
+
+/* Progress Bar Wrapper */
+.progress-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.progress-wrapper .progress {
+    flex: 1;
+    height: 8px;
+    border-radius: 4px;
+}
+
+.progress-wrapper .progress-text {
+    font-size: 0.85rem;
+    font-weight: 600;
+    min-width: 40px;
+}
+
+/* Badges */
+.badge.bg-lab {
+    background: linear-gradient(135deg, var(--ptit-blue), var(--ptit-light-blue)) !important;
+}
+
+/* Timeline */
+.timeline {
+    position: relative;
+    padding-left: 30px;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #e0e0e0;
+}
+
+.timeline-item {
+    position: relative;
+    padding-bottom: 20px;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -24px;
+    top: 5px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.timeline-content {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+}
+
+/* Info Items */
+.info-item {
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 10px;
+}
+
+.info-item i {
+    color: var(--ptit-blue);
+}
+
+/* Cards */
+.card {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+}
+
+.card-header {
+    background: linear-gradient(135deg, var(--ptit-dark), var(--ptit-blue));
+    color: white;
+    border-radius: 12px 12px 0 0 !important;
+    font-weight: 600;
+}
+
+/* Buttons */
+.btn-primary {
+    background: linear-gradient(135deg, var(--ptit-blue), var(--ptit-light-blue));
+    border: none;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, var(--ptit-dark), var(--ptit-blue));
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #10b981, #34d399);
+    border: none;
+}
+
+.btn-warning {
+    background: linear-gradient(135deg, #f59e0b, #fbbf24);
+    border: none;
+}
+
+/* Alerts */
+.alert {
+    border: none;
+    border-radius: 8px;
+}
+
+.alert-success {
+    background: linear-gradient(135deg, #10b981, #34d399);
+    color: white;
+}
+
+.alert-danger {
+    background: linear-gradient(135deg, #ef4444, #f87171);
+    color: white;
+}
+
+.alert-info {
+    background: linear-gradient(135deg, #3b82f6, #60a5fa);
+    color: white;
+}
+
+/* Progress Value Badge */
+.progress-value {
+    min-width: 50px;
+    text-align: center;
+    font-size: 1rem;
+}
+
+/* Error Pages */
+.error-page {
+    text-align: center;
+    padding: 100px 20px;
+}
+
+.error-page i {
+    font-size: 5rem;
+    color: #ddd;
+}
+
+.error-page h1 {
+    font-size: 3rem;
+    color: var(--ptit-dark);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .page-title {
+        font-size: 1.4rem;
+    }
+
+    .stat-card {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .stat-info h3 {
+        font-size: 1.5rem;
+    }
+}

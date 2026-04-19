@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}404 - Không tìm thấy{% endblock %}
+{% block content %}
+<div class="error-page">
+    <i class="fas fa-question-circle"></i>
+    <h1>404</h1>
+    <p>Trang bạn tìm kiếm không tồn tại.</p>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+        <i class="fas fa-home me-2"></i>Quay về Dashboard
+    </a>
+</div>
+{% endblock %}

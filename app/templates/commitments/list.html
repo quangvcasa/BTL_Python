@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Danh sách Cam kết{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="page-title">
+        <i class="fas fa-handshake me-3"></i>Danh sách Cam kết
+    </h1>
+    {% if current_user.is_admin() %}
+    <a href="{{ url_for('commitments_create') }}" class="btn btn-primary">
+        <i class="fas fa-plus me-2"></i>Tạo Cam kết mới
+    </a>
+    {% endif %}
+</div>
+
+{% if info %}
+<div class="alert alert-info">
+    <i class="fas fa-info-circle me-2"></i>{{ info }}
+</div>
+{% else %}
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            {% if current_user.is_admin() %}
+            <div class="col-md-2">
+                <label for="lab_id" class="form-label">Lab</label>
+                <select class="form-select" id="lab_id" name="lab_id">
+                    <option value="">Tất cả Labs</option>
+                    {% for lab in labs %}
+                    <option value="{{ lab.id }}"
+                        {% if request.args.get('lab_id') == lab.id|string %}selected{% endif %}>
+                        {{ lab.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            <div class="col-md-2">
+                <label for="status" class="form-label">Trạng thái</label>
+                <select class="form-select" id="status" name="status">
+                    <option value="">Tất cả</option>
+                    <option value="Mới"            {% if request.args.get('status') == 'Mới' %}selected{% endif %}>Mới</option>
+                    <option value="Đã phân công"   {% if request.args.get('status') == 'Đã phân công' %}selected{% endif %}>Đã phân công</option>
+                    <option value="Đang thực hiện" {% if request.args.get('status') == 'Đang thực hiện' %}selected{% endif %}>Đang thực hiện</option>
+                    <option value="Hoàn thành"     {% if request.args.get('status') == 'Hoàn thành' %}selected{% endif %}>Hoàn thành</option>
+                    <option value="Quá hạn"        {% if request.args.get('status') == 'Quá hạn' %}selected{% endif %}>Quá hạn</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label for="priority" class="form-label">Ưu tiên</label>
+                <select class="form-select" id="priority" name="priority">
+                    <option value="">Tất cả</option>
+                    <option value="Khẩn cấp" {% if request.args.get('priority') == 'Khẩn cấp' %}selected{% endif %}>🚨 Khẩn cấp</option>
+                    <option value="Cao"      {% if request.args.get('priority') == 'Cao' %}selected{% endif %}>⬆ Cao</option>
+                    <option value="Trung bình" {% if request.args.get('priority') == 'Trung bình' %}selected{% endif %}>➡ Trung bình</option>
+                    <option value="Thấp"     {% if request.args.get('priority') == 'Thấp' %}selected{% endif %}>⬇ Thấp</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label for="search" class="form-label">Tìm kiếm</label>
+                <input type="text" class="form-control" id="search" name="search"
+                       value="{{ request.args.get('search', '') }}"
+                       placeholder="Tiêu đề hoặc mã cam kết...">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-search me-1"></i>Lọc
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Table -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Mã</th>
+                        <th>Tiêu đề</th>
+                        <th>Lab</th>
+                        <th>Ưu tiên</th>
+                        <th>Tiến độ</th>
+                        <th>Bắt đầu</th>
+                        <th>Hạn</th>
+                        <th>Trạng thái</th>
+                        <th>Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for commit in commitments %}
+                    <tr>
+                        <td>
+                            <code class="small">{{ commit.code or '—' }}</code>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('commitments_detail', commitment_id=commit.id) }}">
+                                {{ commit.title }}
+                            </a>
+                        </td>
+                        <td>
+                            <span class="badge bg-lab">{{ commit.lab.name }}</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ commit.get_priority_color() }}">
+                                {{ commit.priority }}
+                            </span>
+                        </td>
+                        <td style="min-width:110px;">
+                            <div class="progress-wrapper">
+                                <div class="progress">
+                                    <div class="progress-bar bg-{{ 'success' if commit.progress >= 100 else 'primary' }}"
+                                         style="width:{{ commit.progress }}%"></div>
+                                </div>
+                                <span class="progress-text">{{ commit.progress }}%</span>
+                            </div>
+                        </td>
+                        <td><small>{{ commit.start_date.strftime('%d/%m/%Y') }}</small></td>
+                        <td><small>{{ commit.deadline.strftime('%d/%m/%Y') }}</small></td>
+                        <td>
+                            <span class="badge bg-{{ commit.get_status_color() }}">
+                                {{ commit.status }}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('commitments_detail', commitment_id=commit.id) }}"
+                               class="btn btn-sm btn-outline-info" title="Xem chi tiết">
+                                <i class="fas fa-eye"></i>
+                            </a>
+
+                            {% if current_user.is_admin() %}
+                            <a href="{{ url_for('commitments_edit', commitment_id=commit.id) }}"
+                               class="btn btn-sm btn-warning" title="Chỉnh sửa">
+                                <i class="fas fa-cog"></i>
+                            </a>
+                            <form action="{{ url_for('commitments_delete', commitment_id=commit.id) }}"
+                                  method="POST" class="d-inline"
+                                  onsubmit="return confirm('Xóa cam kết \"{{ commit.title }}\"?\nHành động không thể hoàn tác.');">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-danger" title="Xóa">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-5">
+                            <i class="fas fa-handshake fa-3x mb-3 d-block"></i>
+                            Chưa có cam kết nào.
+                            {% if current_user.is_admin() %}
+                            <br>
+                            <a href="{{ url_for('commitments_create') }}"
+                               class="btn btn-primary btn-sm mt-2">
+                                <i class="fas fa-plus me-1"></i>Tạo Cam kết đầu tiên
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
