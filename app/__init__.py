@@ -240,6 +240,8 @@ def dashboard():
         context['overdue'] = Commitment.query.filter_by(status=Commitment.STATUS_OVERDUE).count()
         context['needs_revision'] = Commitment.query.filter_by(status=Commitment.STATUS_NEEDS_REVISION).count()
         
+        context['pending_items'] = ExecutionItem.query.filter_by(status=ExecutionItem.STATUS_PENDING_REVIEW).order_by(ExecutionItem.updated_at.desc()).all()
+        
         context['recent'] = Commitment.query.order_by(Commitment.updated_at.desc()).limit(10).all()
 
         labs = Lab.query.all()
@@ -286,10 +288,10 @@ def dashboard():
             Commitment.status == Commitment.STATUS_DONE
         ).count()
         
-        context['recent_pending_items'] = ExecutionItem.query.join(Commitment).filter(
+        context['pending_items'] = ExecutionItem.query.join(Commitment).filter(
             Commitment.lab_id.in_(lab_ids),
             ExecutionItem.status == ExecutionItem.STATUS_PENDING_REVIEW
-        ).order_by(ExecutionItem.updated_at.desc()).limit(10).all()
+        ).order_by(ExecutionItem.updated_at.desc()).all()
 
     else:
         context['role_view'] = 'member'
@@ -1528,8 +1530,12 @@ def ei_update(item_id):
         )
         db.session.commit()
 
-        if new_status == ExecutionItem.STATUS_PENDING_REVIEW and commitment.lab and commitment.lab.manager_id:
-            Notification.notify_ei_pending_review(item, commitment.lab.manager_id)
+        if new_status == ExecutionItem.STATUS_PENDING_REVIEW:
+            if commitment.lab and commitment.lab.manager_id:
+                Notification.notify_ei_pending_review(item, commitment.lab.manager_id)
+            admins = User.query.filter_by(role='admin').all()
+            for ad in admins:
+                Notification.notify_ei_pending_review(item, ad.id)
             db.session.commit()
 
         flash(f'Hạng mục "{item.title}" đã được cập nhật.', 'success')
