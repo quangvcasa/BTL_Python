@@ -44,6 +44,11 @@ def get_csrf_token():
 app.jinja_env.globals['csrf_token'] = get_csrf_token
 app.jinja_env.filters['role_label'] = role_label
 
+@app.context_processor
+def inject_today():
+    from datetime import datetime
+    return {'today': datetime.today()}
+
 @app.before_request
 def csrf_protect():
     """Validate CSRF token on all POST/PUT/DELETE requests, except login page."""
