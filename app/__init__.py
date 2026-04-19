@@ -698,12 +698,17 @@ def commitments_list():
 
     # Non-admins only see commitments belonging to their lab
     if not current_user.is_admin():
-        if not current_user.lab_id:
+        user_lab_ids = {m.lab_id for m in current_user.memberships.all()}.union(
+            {current_user.lab_id} if current_user.lab_id else set()
+        ).union(
+            {l.id for l in current_user.managed_labs} if current_user.managed_labs else set()
+        )
+        if not user_lab_ids:
             return render_template(
                 'commitments/list.html', commitments=[], labs=[],
                 info='Bạn chưa thuộc Lab nào. Liên hệ Admin để được phân công.'
             )
-        query = query.filter_by(lab_id=current_user.lab_id)
+        query = query.filter(Commitment.lab_id.in_(list(user_lab_ids)))
 
     lab_filter  = request.args.get('lab_id')
     status_filter = request.args.get('status')
@@ -831,6 +836,7 @@ def commitments_edit(commitment_id):
 
     if request.method == 'POST':
         old_title = commitment.title
+        old_deadline = commitment.deadline
 
         code_input  = request.form.get('code', '').strip() or None
         title       = request.form.get('title', '').strip()
@@ -881,7 +887,25 @@ def commitments_edit(commitment_id):
         commitment.deadline    = deadline
         commitment.update_status()
 
+        from app.utils import get_vn_time
+        now = get_vn_time()
+
+        # If Admin extends the deadline to a future date
+        if old_deadline and deadline and old_deadline != deadline and deadline > now:
+            commitment.status = Commitment.STATUS_ACTIVE
+            for item in commitment.execution_items:
+                if item.status == ExecutionItem.STATUS_OVERDUE:
+                    item.status = ExecutionItem.STATUS_IN_PROGRESS
+
         db.session.commit()
+
+        if old_deadline and deadline and old_deadline != deadline:
+            if commitment.lab and commitment.lab.manager_id:
+                title_notif = "Thời hạn cam kết thay đổi"
+                message_notif = f"Admin vừa gia hạn cam kết '{commitment.title}' tới {deadline.strftime('%d/%m/%Y %H:%M')}."
+                Notification.create(commitment.lab.manager_id, title_notif, message_notif, 'info', url_for('commitments_detail', commitment_id=commitment.id))
+            db.session.commit()
+
         ActivityLog.log(
             current_user.id, 'UPDATE', 'Commitment', commitment.id,
             f'Cập nhật cam kết: {old_title} → {commitment.title}', get_client_ip()
