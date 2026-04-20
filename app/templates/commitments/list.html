@@ -41,21 +41,23 @@
                 <label for="status" class="form-label">Trạng thái</label>
                 <select class="form-select" id="status" name="status">
                     <option value="">Tất cả</option>
-                    <option value="Mới"            {% if request.args.get('status') == 'Mới' %}selected{% endif %}>Mới</option>
-                    <option value="Đã phân công"   {% if request.args.get('status') == 'Đã phân công' %}selected{% endif %}>Đã phân công</option>
-                    <option value="Đang thực hiện" {% if request.args.get('status') == 'Đang thực hiện' %}selected{% endif %}>Đang thực hiện</option>
-                    <option value="Hoàn thành"     {% if request.args.get('status') == 'Hoàn thành' %}selected{% endif %}>Hoàn thành</option>
-                    <option value="Quá hạn"        {% if request.args.get('status') == 'Quá hạn' %}selected{% endif %}>Quá hạn</option>
+                    <option value="new"             {% if request.args.get('status') == 'new' %}selected{% endif %}>Mới</option>
+                    <option value="in_progress"     {% if request.args.get('status') == 'in_progress' %}selected{% endif %}>Đang thực hiện</option>
+                    <option value="pending_manager" {% if request.args.get('status') == 'pending_manager' %}selected{% endif %}>Chờ QL Duyệt</option>
+                    <option value="pending_admin"   {% if request.args.get('status') == 'pending_admin' %}selected{% endif %}>Chờ Admin Duyệt</option>
+                    <option value="completed"       {% if request.args.get('status') == 'completed' %}selected{% endif %}>Hoàn thành</option>
+                    <option value="rejected"        {% if request.args.get('status') == 'rejected' %}selected{% endif %}>Yêu Cầu Sửa</option>
+                    <option value="overdue"         {% if request.args.get('status') == 'overdue' %}selected{% endif %}>Quá hạn</option>
                 </select>
             </div>
             <div class="col-md-2">
                 <label for="priority" class="form-label">Ưu tiên</label>
                 <select class="form-select" id="priority" name="priority">
                     <option value="">Tất cả</option>
-                    <option value="Khẩn cấp" class="text-danger fw-bold" {% if request.args.get('priority') == 'Khẩn cấp' %}selected{% endif %}>🚨 Khẩn cấp</option>
-                    <option value="Cao" class="text-danger" {% if request.args.get('priority') == 'Cao' %}selected{% endif %}>⬆ Cao</option>
-                    <option value="Trung bình" class="text-primary" {% if request.args.get('priority') == 'Trung bình' %}selected{% endif %}>➡ Trung bình</option>
-                    <option value="Thấp" class="text-secondary" {% if request.args.get('priority') == 'Thấp' %}selected{% endif %}>⬇ Thấp</option>
+                    <option value="4" class="text-danger fw-bold" {% if request.args.get('priority') == '4' %}selected{% endif %}>🚨 Khẩn cấp</option>
+                    <option value="3" class="text-danger" {% if request.args.get('priority') == '3' %}selected{% endif %}>⬆ Cao</option>
+                    <option value="2" class="text-primary" {% if request.args.get('priority') == '2' %}selected{% endif %}>➡ Trung bình</option>
+                    <option value="1" class="text-secondary" {% if request.args.get('priority') == '1' %}selected{% endif %}>⬇ Thấp</option>
                 </select>
             </div>
             <div class="col-md-4">
@@ -107,7 +109,7 @@
                         </td>
                         <td>
                             <span class="badge bg-{{ commit.get_priority_color() }}">
-                                {{ commit.priority }}
+                                {{ commit.get_priority_label() }}
                             </span>
                         </td>
                         <td style="min-width:110px;">
@@ -123,7 +125,7 @@
                         <td><small>{{ commit.deadline.strftime('%d/%m/%Y') }}</small></td>
                         <td>
                             <span class="badge bg-{{ commit.get_status_color() }}">
-                                {{ commit.status }}
+                                {{ commit.get_status_label() }}
                             </span>
                         </td>
                         <td>

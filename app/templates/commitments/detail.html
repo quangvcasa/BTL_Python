@@ -23,10 +23,10 @@
                 </div>
                 <div class="d-flex gap-2 align-items-center">
                     <span class="badge bg-{{ commitment.get_priority_color() }}">
-                        {{ commitment.priority }}
+                        {{ commitment.get_priority_label() }}
                     </span>
                     <span class="badge bg-{{ commitment.get_status_color() }}">
-                        {{ commitment.status }}
+                        {{ commitment.get_status_label() }}
                     </span>
                 </div>
             </div>

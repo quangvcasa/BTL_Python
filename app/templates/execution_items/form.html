@@ -24,7 +24,7 @@
                 <small class="text-muted">
                     Cam kết: <strong>{{ commitment.code }}</strong> –
                     Hạn cam kết: <strong>{{ commitment.deadline.strftime('%d/%m/%Y') }}</strong>
-                    <span class="badge bg-{{ commitment.get_status_color() }} ms-2">{{ commitment.status }}</span>
+                    <span class="badge bg-{{ commitment.get_status_color() }} ms-2">{{ commitment.get_status_label() }}</span>
                 </small>
             </div>
 

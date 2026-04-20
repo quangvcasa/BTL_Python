@@ -95,7 +95,7 @@
                     <td><code>{{ commit.code }}</code></td>
                     <td>{{ commit.title }}</td>
                     <td><span class="badge bg-lab">{{ commit.lab.name }}</span></td>
-                    <td><span class="badge bg-{{ commit.get_status_color() }}">{{ commit.status }}</span></td>
+                    <td><span class="badge bg-{{ commit.get_status_color() }}">{{ commit.get_status_label() }}</span></td>
                     <td>
                         <a href="{{ url_for('commitments_detail', commitment_id=commit.id) }}"
                             class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i></a>
@@ -226,7 +226,7 @@
                         <td><small class="text-muted">{{ ei.commitment.title }}</small></td>
                         <td><strong>{{ ei.title }}</strong></td>
                         <td
-                            class="{% if ei.due_date and ei.due_date < today and ei.status not in ('Hoàn thành','Từ chối') %}text-danger fw-bold{% endif %}">
+                            class="{% if ei.due_date and ei.due_date < today and ei.status not in ('completed','rejected') %}text-danger fw-bold{% endif %}">
                             {{ ei.due_date.strftime('%d/%m/%Y') if ei.due_date else 'Vô thời hạn' }}
                         </td>
                         <td><span class="badge bg-{{ ei.get_status_color() }}">{{ ei.get_status_label() }}</span></td>

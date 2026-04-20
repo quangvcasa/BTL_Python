@@ -141,7 +141,7 @@ class Commitment(db.Model):
 
     # Status values (single source of truth)
     STATUS_NEW             = 'new'
-    STATUS_ACTIVE          = 'active'
+    STATUS_ACTIVE          = 'in_progress'
     STATUS_OVERDUE         = 'overdue'
     STATUS_PENDING_MANAGER = 'pending_manager'
     STATUS_PENDING_ADMIN   = 'pending_admin'
@@ -168,10 +168,10 @@ class Commitment(db.Model):
         STATUS_REJECTED: 'danger'
     }
 
-    PRIORITY_LOW     = 'Thấp'
-    PRIORITY_MEDIUM  = 'Trung bình'
-    PRIORITY_HIGH    = 'Cao'
-    PRIORITY_URGENT  = 'Khẩn cấp'
+    PRIORITY_LOW     = 1
+    PRIORITY_MEDIUM  = 2
+    PRIORITY_HIGH    = 3
+    PRIORITY_URGENT  = 4
 
     id = db.Column(db.Integer, primary_key=True)
     # Human-readable code auto-generated on creation, e.g. CAM-0042
@@ -183,7 +183,7 @@ class Commitment(db.Model):
     # This is OPTIONAL at creation time – lab assignment (lab_id) is sufficient.
     # TODO: execution-phase will formalise this into ExecutionItem.
     assigned_to = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    priority = db.Column(db.String(20), nullable=False, default='Trung bình')
+    priority = db.Column(db.Integer, nullable=False, default=1)
     start_date = db.Column(db.DateTime, nullable=False)
     deadline = db.Column(db.DateTime, nullable=False)
     progress = db.Column(db.Integer, default=0)  # 0–100
@@ -284,12 +284,28 @@ class Commitment(db.Model):
 
 
     def get_priority_color(self):
+        try:
+            p_val = int(self.priority)
+        except (ValueError, TypeError):
+            p_val = self.PRIORITY_LOW
         return {
             self.PRIORITY_URGENT: 'danger',
             self.PRIORITY_HIGH:   'danger',
             self.PRIORITY_MEDIUM: 'primary',
             self.PRIORITY_LOW:    'secondary',
-        }.get(self.priority, 'secondary')
+        }.get(p_val, 'secondary')
+
+    def get_priority_label(self):
+        try:
+            p_val = int(self.priority)
+        except (ValueError, TypeError):
+            p_val = self.PRIORITY_LOW
+        return {
+            self.PRIORITY_URGENT: 'Khẩn cấp',
+            self.PRIORITY_HIGH:   'Cao',
+            self.PRIORITY_MEDIUM: 'Trung bình',
+            self.PRIORITY_LOW:    'Thấp',
+        }.get(p_val, 'Thấp')
 
     def validate_ready_for_submit(self, actor):
         """Validates all item requirements and actor authorization.

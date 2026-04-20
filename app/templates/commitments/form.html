@@ -74,11 +74,11 @@
                                 Mức độ ưu tiên <span class="text-danger">*</span>
                             </label>
                             <select class="form-select" id="priority" name="priority" required>
-                                {% set cur_priority = commitment.priority if commitment else 'Trung bình' %}
-                                <option value="Thấp" class="text-secondary" {% if cur_priority == 'Thấp' %}selected{% endif %}>⬇ Thấp</option>
-                                <option value="Trung bình" class="text-primary" {% if cur_priority == 'Trung bình' %}selected{% endif %}>➡ Trung bình</option>
-                                <option value="Cao" class="text-danger" {% if cur_priority == 'Cao' %}selected{% endif %}>⬆ Cao</option>
-                                <option value="Khẩn cấp" class="text-danger fw-bold" {% if cur_priority == 'Khẩn cấp' %}selected{% endif %}>🚨 Khẩn cấp</option>
+                                {% set cur_priority = commitment.priority if commitment else 1 %}
+                                <option value="1" class="text-secondary" {% if cur_priority == 1 %}selected{% endif %}>⬇ Thấp</option>
+                                <option value="2" class="text-primary" {% if cur_priority == 2 %}selected{% endif %}>➡ Trung bình</option>
+                                <option value="3" class="text-danger" {% if cur_priority == 3 %}selected{% endif %}>⬆ Cao</option>
+                                <option value="4" class="text-danger fw-bold" {% if cur_priority == 4 %}selected{% endif %}>🚨 Khẩn cấp</option>
                             </select>
                         </div>
                         <div class="col-md-6 mb-3">
@@ -86,7 +86,7 @@
                             {% if commitment %}
                             <div class="form-control bg-light text-muted">
                                 <span class="badge bg-{{ commitment.get_status_color() }}">
-                                    {{ commitment.status }}
+                                    {{ commitment.get_status_label() }}
                                 </span>
                                 <small class="ms-2">(Cập nhật tự động)</small>
                             </div>

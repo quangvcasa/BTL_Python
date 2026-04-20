@@ -278,12 +278,12 @@ def dashboard():
         
         context['recent'] = Commitment.query.order_by(Commitment.updated_at.desc()).limit(10).all()
 
-        labs = Lab.query.all()
-        commitments_by_lab = []
-        for lab in labs:
-            count = Commitment.query.filter_by(lab_id=lab.id).count()
-            commitments_by_lab.append({'name': lab.name, 'count': count})
-        context['commitments_by_lab'] = commitments_by_lab
+        lab_counts = db.session.query(
+            Lab.name,
+            db.func.count(Commitment.id)
+        ).outerjoin(Commitment, Lab.id == Commitment.lab_id).group_by(Lab.id).all()
+        
+        context['commitments_by_lab'] = [{'name': name, 'count': count} for name, count in lab_counts]
 
         # We keep status Chart for admin
         active_statuses = [
@@ -440,7 +440,6 @@ def labs_delete(lab_id):
 
 @app.route('/labs/manage/<int:lab_id>', methods=['GET', 'POST'])
 @login_required
-@admin_required
 def labs_manage(lab_id):
     """Lab membership management page.
     POST actions (via hidden 'action' field):
@@ -449,6 +448,12 @@ def labs_manage(lab_id):
       remove_member – remove any membership row
     """
     lab = Lab.query.get_or_404(lab_id)
+    is_admin = current_user.is_admin()
+    is_manager = lab.manager_id == current_user.id
+    
+    if not (is_admin or is_manager):
+        flash('Bạn không có quyền quản lý Lab này.', 'danger')
+        return redirect(url_for('dashboard'))
 
     if request.method == 'POST':
         action = request.form.get('action')
@@ -457,6 +462,10 @@ def labs_manage(lab_id):
         # ACTION: set_manager                                                  #
         # ------------------------------------------------------------------ #
         if action == 'set_manager':
+            if not is_admin:
+                flash('Chỉ Admin mới có quyền gán Quản lý Lab.', 'danger')
+                return redirect(url_for('labs_manage', lab_id=lab_id))
+
             new_manager_id = request.form.get('manager_user_id', type=int)
             if not new_manager_id:
                 flash('Vui lòng chọn một user làm quản lý.', 'danger')
@@ -509,6 +518,10 @@ def labs_manage(lab_id):
         # ACTION: add_member                                                   #
         # ------------------------------------------------------------------ #
         elif action == 'add_member':
+            if not is_manager:
+                flash('Chỉ Quản lý Lab mới có quyền thêm thành viên vào Lab.', 'danger')
+                return redirect(url_for('labs_manage', lab_id=lab_id))
+
             member_user_id = request.form.get('member_user_id', type=int)
             if not member_user_id:
                 flash('Vui lòng chọn một user để thêm.', 'danger')
@@ -550,6 +563,10 @@ def labs_manage(lab_id):
         # ACTION: remove_member                                                #
         # ------------------------------------------------------------------ #
         elif action == 'remove_member':
+            if not is_manager:
+                flash('Chỉ Quản lý Lab mới có quyền xóa thành viên khỏi Lab.', 'danger')
+                return redirect(url_for('labs_manage', lab_id=lab_id))
+
             membership_id = request.form.get('membership_id', type=int)
             membership = LabMembership.query.filter_by(
                 id=membership_id, lab_id=lab_id).first_or_404()
@@ -598,7 +615,9 @@ def labs_manage(lab_id):
         lab=lab,
         manager_membership=manager_membership,
         members=members,
-        eligible_users=eligible_users,
+        is_admin=is_admin,
+        is_manager=is_manager,
+        eligible_users=eligible_users
     )
 
 
@@ -764,8 +783,8 @@ def commitments_list():
         query = query.filter_by(lab_id=int(lab_filter))
     if status_filter:
         query = query.filter_by(status=status_filter)
-    if priority_filter:
-        query = query.filter_by(priority=priority_filter)
+    if priority_filter and priority_filter.isdigit():
+        query = query.filter_by(priority=int(priority_filter))
     if search:
         query = query.filter(
             db.or_(
@@ -774,15 +793,7 @@ def commitments_list():
             )
         )
 
-    from sqlalchemy import case
-    priority_order = case(
-        (Commitment.priority == Commitment.PRIORITY_URGENT, 4),
-        (Commitment.priority == Commitment.PRIORITY_HIGH, 3),
-        (Commitment.priority == Commitment.PRIORITY_MEDIUM, 2),
-        (Commitment.priority == Commitment.PRIORITY_LOW, 1),
-        else_=0
-    )
-    commitments = query.order_by(priority_order.desc(), Commitment.created_at.asc()).all()
+    commitments = query.order_by(Commitment.priority.desc(), Commitment.created_at.asc()).all()
     labs = Lab.query.all()
 
     return render_template(
@@ -802,7 +813,7 @@ def commitments_create():
         title       = request.form.get('title', '').strip()
         description = request.form.get('description', '').strip() or None
         lab_id      = request.form.get('lab_id', type=int)
-        priority    = request.form.get('priority', 'Trung bình')
+        priority    = request.form.get('priority', type=int) or 1
         code_input  = request.form.get('code', '').strip() or None
         start_str   = request.form.get('start_date', '')
         deadline_str = request.form.get('deadline', '')
@@ -836,7 +847,7 @@ def commitments_create():
             Commitment.PRIORITY_LOW, Commitment.PRIORITY_MEDIUM,
             Commitment.PRIORITY_HIGH, Commitment.PRIORITY_URGENT
         ):
-            priority = Commitment.PRIORITY_MEDIUM
+            priority = Commitment.PRIORITY_LOW
 
         if errors:
             for err in errors:
@@ -895,7 +906,7 @@ def commitments_edit(commitment_id):
         title       = request.form.get('title', '').strip()
         description = request.form.get('description', '').strip() or None
         lab_id      = request.form.get('lab_id', type=int)
-        priority    = request.form.get('priority', commitment.priority)
+        priority    = request.form.get('priority', type=int) or commitment.priority
         start_str   = request.form.get('start_date', '')
         deadline_str = request.form.get('deadline', '')
 
@@ -1829,22 +1840,48 @@ def download_file(filename):
 @app.route('/reports')
 @login_required
 def reports():
-    if not current_user.is_admin():
+    db.session.commit()
+    db.session.expire_all()
+
+    manager_memberships = LabMembership.query.filter_by(
+        user_id=current_user.id, role_in_lab='manager'
+    ).all()
+    manager_lab_ids = list({m.lab_id for m in manager_memberships}.union(
+        {l.id for l in current_user.managed_labs} if current_user.managed_labs else set()
+    ))
+
+    if not current_user.is_admin() and not manager_lab_ids:
         flash('Bạn không có quyền truy cập trang này.', 'danger')
         return redirect(url_for('dashboard'))
 
-    labs = Lab.query.all()
+    if current_user.is_admin():
+        labs = Lab.query.all()
+        base_query = Commitment.query
+    else:
+        labs = Lab.query.filter(Lab.id.in_(manager_lab_ids)).all()
+        base_query = Commitment.query.filter(Commitment.lab_id.in_(manager_lab_ids))
 
-    total = Commitment.query.count()
-    completed = Commitment.query.filter_by(status='Hoàn thành').count()
-    completion_rate = (completed / total * 100) if total > 0 else 0
+    total_commitments = base_query.count()
+    completed = base_query.filter_by(status=Commitment.STATUS_COMPLETED).count()
+    completion_rate = (completed / total_commitments * 100) if total_commitments > 0 else 0
+
+    lab_stats_query = db.session.query(
+        Lab,
+        db.func.count(Commitment.id).label('total'),
+        db.func.sum(db.case((Commitment.status == Commitment.STATUS_COMPLETED, 1), else_=0)).label('completed'),
+        db.func.sum(db.case((Commitment.status == Commitment.STATUS_OVERDUE, 1), else_=0)).label('overdue')
+    ).outerjoin(Commitment, Lab.id == Commitment.lab_id)
+
+    if not current_user.is_admin():
+        lab_stats_query = lab_stats_query.filter(Lab.id.in_(manager_lab_ids))
+    
+    lab_stats = lab_stats_query.group_by(Lab.id).all()
 
     lab_data = []
-    for lab in labs:
-        commits = Commitment.query.filter_by(lab_id=lab.id).all()
-        total_lab = len(commits)
-        completed_lab = len([c for c in commits if c.status == 'Hoàn thành'])
-        overdue_lab = len([c for c in commits if c.status == 'Quá hạn'])
+    for lab, total_lab, completed_lab, overdue_lab in lab_stats:
+        total_lab = total_lab or 0
+        completed_lab = completed_lab or 0
+        overdue_lab = overdue_lab or 0
         lab_data.append({
             'name': lab.name,
             'total': total_lab,
@@ -1856,14 +1893,30 @@ def reports():
     status_dist = db.session.query(
         Commitment.status,
         db.func.count(Commitment.id)
-    ).group_by(Commitment.status).all()
+    )
+    if not current_user.is_admin():
+        status_dist = status_dist.filter(Commitment.lab_id.in_(manager_lab_ids))
+    status_dist = status_dist.group_by(Commitment.status).all()
 
-    chart_labels = [s[0] for s in status_dist]
-    chart_data = [s[1] for s in status_dist]
+    # Aggregate chart data correctly mimicking dashboard logic
+    status_map = dict(status_dist)
+    active_statuses = [
+        Commitment.STATUS_ACTIVE,
+        Commitment.STATUS_PENDING_MANAGER,
+        Commitment.STATUS_PENDING_ADMIN,
+        Commitment.STATUS_REJECTED
+    ]
+    active_count = sum(status_map.get(st, 0) for st in active_statuses)
+    completed_count = status_map.get(Commitment.STATUS_COMPLETED, 0)
+    new_commits = status_map.get(Commitment.STATUS_NEW, 0)
+    overdue_count = status_map.get(Commitment.STATUS_OVERDUE, 0)
+
+    chart_labels = ['Mới', 'Đang thực hiện', 'Hoàn thành', 'Quá hạn']
+    chart_data = [new_commits, active_count, completed_count, overdue_count]
 
     return render_template('reports/index.html',
                            labs=labs,
-                           total=total,
+                           total=total_commitments,
                            completed=completed,
                            completion_rate=completion_rate,
                            lab_data=lab_data,
@@ -1925,17 +1978,23 @@ def export_labs():
     rows = []
     rows.append(['STT', 'Tên Lab', 'Quản lý', 'Email', 'Tổng cam kết', 'Hoàn thành', 'Quá hạn', 'Tỷ lệ (%)'])
 
-    for idx, lab in enumerate(labs, 1):
-        commits = Commitment.query.filter_by(lab_id=lab.id).all()
-        total = len(commits)
-        completed = len([c for c in commits if c.status == 'Hoàn thành'])
-        overdue = len([c for c in commits if c.status == 'Quá hạn'])
+    lab_stats = db.session.query(
+        Lab,
+        db.func.count(Commitment.id).label('total'),
+        db.func.sum(db.case((Commitment.status == Commitment.STATUS_COMPLETED, 1), else_=0)).label('completed'),
+        db.func.sum(db.case((Commitment.status == Commitment.STATUS_OVERDUE, 1), else_=0)).label('overdue')
+    ).outerjoin(Commitment, Lab.id == Commitment.lab_id).group_by(Lab.id).all()
+
+    for idx, (lab, total, completed, overdue) in enumerate(lab_stats, 1):
+        total = total or 0
+        completed = completed or 0
+        overdue = overdue or 0
         rate = (completed / total * 100) if total > 0 else 0
         rows.append([
             idx,
             lab.name,
-            lab.manager.display_name() if lab.manager else (lab.manager_name or '—'),  # prefer linked User
-            lab.manager.email if lab.manager else (lab.email or '—'),               # prefer linked User
+            lab.manager.display_name() if lab.manager else (lab.manager_name or '—'),
+            lab.manager.email if lab.manager else (lab.email or '—'),
             total, completed, overdue, f'{rate:.1f}'
         ])
 
@@ -2125,10 +2184,16 @@ def export_report_pdf():
 
     today = get_vn_time()
     total = Commitment.query.count()
-    active = Commitment.query.filter(Commitment.status == 'Đang thực hiện').count()
-    completed = Commitment.query.filter_by(status='Hoàn thành').count()
-    overdue = Commitment.query.filter_by(status='Quá hạn').count()
-    new_commits = Commitment.query.filter_by(status='Mới').count()
+    active_statuses = [
+        Commitment.STATUS_ACTIVE,
+        Commitment.STATUS_PENDING_MANAGER,
+        Commitment.STATUS_PENDING_ADMIN,
+        Commitment.STATUS_REJECTED
+    ]
+    active = Commitment.query.filter(Commitment.status.in_(active_statuses)).count()
+    completed = Commitment.query.filter_by(status=Commitment.STATUS_COMPLETED).count()
+    overdue = Commitment.query.filter_by(status=Commitment.STATUS_OVERDUE).count()
+    new_commits = Commitment.query.filter_by(status=Commitment.STATUS_NEW).count()
     completion_rate = (completed / total * 100) if total > 0 else 0
 
     status_dist = db.session.query(
@@ -2136,20 +2201,25 @@ def export_report_pdf():
         db.func.count(Commitment.id)
     ).group_by(Commitment.status).all()
 
-    labs = Lab.query.all()
     lab_rows = [['STT', 'Tên Lab', 'Tổng cam kết', 'Hoàn thành', 'Quá hạn', 'Tỷ lệ (%)']]
-    for idx, lab in enumerate(labs, 1):
-        commits = Commitment.query.filter_by(lab_id=lab.id).all()
-        total_lab = len(commits)
-        completed_lab = len([c for c in commits if c.status == 'Hoàn thành'])
-        overdue_lab = len([c for c in commits if c.status == 'Quá hạn'])
+    lab_stats = db.session.query(
+        Lab,
+        db.func.count(Commitment.id).label('total'),
+        db.func.sum(db.case((Commitment.status == Commitment.STATUS_COMPLETED, 1), else_=0)).label('completed'),
+        db.func.sum(db.case((Commitment.status == Commitment.STATUS_OVERDUE, 1), else_=0)).label('overdue')
+    ).outerjoin(Commitment, Lab.id == Commitment.lab_id).group_by(Lab.id).all()
+
+    for idx, (lab, total_lab, completed_lab, overdue_lab) in enumerate(lab_stats, 1):
+        total_lab = total_lab or 0
+        completed_lab = completed_lab or 0
+        overdue_lab = overdue_lab or 0
         rate = (completed_lab / total_lab * 100) if total_lab > 0 else 0
         lab_rows.append([idx, lab.name, total_lab, completed_lab, overdue_lab, f'{rate:.1f}'])
 
     upcoming_commitments = Commitment.query.filter(
         Commitment.deadline <= today + timedelta(days=7),
         Commitment.deadline >= today,
-        Commitment.status.in_(['Mới', 'Đang thực hiện'])
+        Commitment.status.in_([Commitment.STATUS_NEW] + active_statuses)
     ).order_by(Commitment.deadline.asc()).limit(10).all()
     upcoming_rows = [['STT', 'Tiêu đề', 'Lab', 'Deadline', 'Trạng thái']]
     for idx, c in enumerate(upcoming_commitments, 1):
@@ -2159,7 +2229,7 @@ def export_report_pdf():
             c.title,
             lab_name,
             c.deadline.strftime('%d/%m/%Y %H:%M:%S'),
-            c.status
+            c.get_status_label()
         ])
 
     summary_data = [

@@ -62,7 +62,8 @@
                             Gán từ: {{ manager_membership.created_at.strftime('%d/%m/%Y') }}
                         </small>
                     </div>
-                    <!-- Remove manager -->
+                    <!-- Remove manager form: only manager can remove themselves -->
+                    {% if is_manager %}
                     <form method="POST" style="display:inline;"
                           onsubmit="return confirm('Xóa quản lý khỏi Lab này?');">
                         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -72,6 +73,7 @@
                             <i class="fas fa-user-minus"></i>
                         </button>
                     </form>
+                    {% endif %}
                 </div>
                 {% else %}
                 <p class="text-muted mb-0">
@@ -106,6 +108,7 @@
                             </small>
                             {% endif %}
                         </div>
+                        {% if is_manager %}
                         <form method="POST" style="display:inline;"
                               onsubmit="return confirm('Xóa \'{{ m.user.username }}\' khỏi Lab?');">
                             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -115,6 +118,7 @@
                                 <i class="fas fa-times"></i>
                             </button>
                         </form>
+                        {% endif %}
                     </li>
                     {% endfor %}
                 </ul>
@@ -135,6 +139,7 @@
     <div class="col-lg-6">
 
         <!-- Assign / change manager -->
+        {% if is_admin %}
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0">
@@ -179,8 +184,10 @@
                 </form>
             </div>
         </div>
+        {% endif %}
 
         <!-- Add member -->
+        {% if is_manager %}
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0"><i class="fas fa-user-plus me-2"></i>Thêm Thành viên</h5>
@@ -214,6 +221,7 @@
                 {% endif %}
             </div>
         </div>
+        {% endif %}
 
     </div><!-- /right column -->
 
