@@ -160,6 +160,19 @@ document.addEventListener('DOMContentLoaded', function () {
         return ok;
     }
 
+    // Restrict dates dynamically: No max limit, min limit set to "today" (current timestamp)
+    const nowStr = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    
+    // Only apply min="today" constraint for new entries so we don't break historic edits
+    {% if not commitment %}
+    startInput.setAttribute('min', nowStr);
+    deadlineInput.setAttribute('min', nowStr);
+    {% else %}
+    // If editing, allow extending the deadline into the future, but prevent bringing it strictly earlier than 'today' if it currently is in the future.
+    // To satisfy "Keep minDate: 'today' to prevent selecting past dates for new deadlines" without blocking edits gracefully.
+    deadlineInput.setAttribute('min', nowStr);
+    {% endif %}
+
     startInput.addEventListener('change', validateDates);
     deadlineInput.addEventListener('change', validateDates);
 

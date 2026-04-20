@@ -45,6 +45,8 @@
             </div>
         </div>
 
+        {% set can_edit = (current_user.id == item.assigned_to) %}
+        {% if can_edit %}
         <!-- Update form -->
         <div class="card">
             <div class="card-header">
@@ -110,25 +112,17 @@
                         </div>
                     </div>
 
-                    <!-- Expected finish date (optional) -->
-                    <div class="mb-4">
-                        <label for="expected_finish_date" class="form-label">
-                            Ngày dự kiến hoàn thành
-                            <small class="text-muted">(tùy chọn)</small>
-                        </label>
-                        <input type="datetime-local" class="form-control" id="expected_finish_date"
-                               name="expected_finish_date"
-                               value="{{ item.expected_finish_date.strftime('%Y-%m-%dT%H:%M') if item.expected_finish_date else '' }}"
-                               max="{{ commitment.deadline.strftime('%Y-%m-%dT%H:%M') }}">
-                        <div class="form-text">
-                            Không vượt quá hạn cam kết ({{ commitment.deadline.strftime('%d/%m/%Y') }}).
-                        </div>
-                    </div>
+
 
                     <!-- Evidence files -->
                     <div class="mb-4">
                         <label for="evidence_files" class="form-label">
-                            Trích minh chứng <small class="text-muted">(tùy chọn)</small>
+                            Trích minh chứng 
+                            {% if item.requires_evidence %}
+                                <small class="text-danger">(bắt buộc)</small>
+                            {% else %}
+                                <small class="text-muted">(tùy chọn)</small>
+                            {% endif %}
                         </label>
                         <input type="file" class="form-control" id="evidence_files" name="evidence_files" multiple>
                         <div class="form-text">Ví dụ: ảnh chụp màn hình, hóa đơn, file nén. Giúp quản lý đánh giá nhanh hơn.</div>
@@ -146,6 +140,7 @@
                 </form>
             </div>
         </div>
+        {% endif %}
 
         <!-- History timeline -->
         {% set history = item.updates.all() %}
@@ -190,12 +185,7 @@
                             <small>{{ rec.blocker_reason }}</small>
                         </div>
                         {% endif %}
-                        {% if rec.expected_finish_date %}
-                        <small class="text-muted">
-                            <i class="fas fa-calendar-check me-1"></i>
-                            Dự kiến: {{ rec.expected_finish_date.strftime('%d/%m/%Y') }}
-                        </small>
-                        {% endif %}
+
                         {% if rec.evidence_files.count() > 0 %}
                         <div class="mt-2 text-start">
                             {% for file in rec.evidence_files.all() %}

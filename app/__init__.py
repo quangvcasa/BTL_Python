@@ -43,6 +43,7 @@ def get_csrf_token():
 
 app.jinja_env.globals['csrf_token'] = get_csrf_token
 app.jinja_env.filters['role_label'] = role_label
+app.jinja_env.globals.update(getattr=getattr, min=min, max=max)
 
 @app.context_processor
 def inject_today():
@@ -179,26 +180,50 @@ def profile():
 
     return render_template('users/profile.html')
 
+# ============== CONTEXT PROCESSORS ==============
+@app.context_processor
+def inject_notifications():
+    if current_user.is_authenticated:
+        recent_notifs = Notification.query.filter_by(user_id=current_user.id).order_by(Notification.created_at.desc()).limit(5).all()
+        return dict(recent_notifications=recent_notifs)
+    return dict(recent_notifications=[])
+
 # ============== NOTIFICATION ROUTES ==============
 
 @app.route('/notifications')
 @login_required
-def notifications():
+def notifications_list():
     """List all notifications for current user"""
     notifications_list = Notification.query.filter_by(user_id=current_user.id).order_by(Notification.created_at.desc()).all()
     unread_count = Notification.query.filter_by(user_id=current_user.id, is_read=False).count()
     return render_template('notifications/list.html', notifications=notifications_list, unread_count=unread_count)
 
-@app.route('/notifications/mark-read/<int:notif_id>')
+@app.route('/notifications/read/<int:id>')
 @login_required
-def notifications_mark_read(notif_id):
-    """Mark a single notification as read"""
-    notif = Notification.query.filter_by(id=notif_id, user_id=current_user.id).first_or_404()
+def read_notification(id):
+    """Mark a single notification as read and redirect"""
+    notif = Notification.query.filter_by(id=id, user_id=current_user.id).first_or_404()
     notif.is_read = True
     db.session.commit()
-    if notif.link:
-        return redirect(notif.link)
-    return redirect(url_for('notifications'))
+    
+    link = notif.link
+    if link:
+        # Patch legacy 404 links dynamically
+        if link.startswith('/commitments/') and not link.startswith('/commitments/detail/'):
+            parts = link.strip('/').split('/')
+            if len(parts) == 2 and parts[1].isdigit():
+                link = f"/commitments/detail/{parts[1]}"
+        return redirect(link)
+    return redirect(url_for('notifications_list'))
+
+@app.route('/notifications/delete/<int:id>', methods=['POST'])
+@login_required
+def delete_notification(id):
+    notif = Notification.query.filter_by(id=id, user_id=current_user.id).first_or_404()
+    db.session.delete(notif)
+    db.session.commit()
+    flash('Đã xóa thông báo.', 'success')
+    return redirect(request.referrer or url_for('notifications_list'))
 
 @app.route('/notifications/mark-all-read', methods=['POST'])
 @login_required
@@ -207,7 +232,7 @@ def notifications_mark_all_read():
     Notification.query.filter_by(user_id=current_user.id, is_read=False).update({'is_read': True})
     db.session.commit()
     flash('Tất cả thông báo đã được đánh dấu là đã đọc.', 'success')
-    return redirect(url_for('notifications'))
+    return redirect(url_for('notifications_list'))
 
 @app.route('/api/notifications/count')
 @login_required
@@ -221,6 +246,10 @@ def api_notifications_count():
 @app.route('/dashboard')
 @login_required
 def dashboard():
+    # Force a fresh transaction to ensure stale/deleted data is cleared from cache
+    db.session.commit()
+    db.session.expire_all()
+    
     run_overdue_checks()
     today = get_vn_time()
     context = {'unread_notif_count': Notification.query.filter_by(user_id=current_user.id, is_read=False).count()}
@@ -236,11 +265,11 @@ def dashboard():
         context['role_view'] = 'admin'
         context['total'] = Commitment.query.count()
         context['total_execution_items'] = ExecutionItem.query.count()
-        context['pending_review'] = Commitment.query.filter_by(status=Commitment.STATUS_PENDING_ADMIN_REVIEW).count()
+        context['pending_review'] = Commitment.query.filter_by(status=Commitment.STATUS_PENDING_ADMIN).count()
         context['overdue'] = Commitment.query.filter_by(status=Commitment.STATUS_OVERDUE).count()
-        context['needs_revision'] = Commitment.query.filter_by(status=Commitment.STATUS_NEEDS_REVISION).count()
+        context['needs_revision'] = Commitment.query.filter_by(status=Commitment.STATUS_REJECTED).count()
         
-        context['pending_items'] = ExecutionItem.query.filter_by(status=ExecutionItem.STATUS_PENDING_REVIEW).order_by(ExecutionItem.updated_at.desc()).all()
+        context['pending_items'] = Commitment.query.filter_by(status=Commitment.STATUS_PENDING_ADMIN).order_by(Commitment.updated_at.desc()).all()
         
         context['recent'] = Commitment.query.order_by(Commitment.updated_at.desc()).limit(10).all()
 
@@ -253,7 +282,7 @@ def dashboard():
 
         # We keep status Chart for admin
         active = Commitment.query.filter(Commitment.status == Commitment.STATUS_ACTIVE).count()
-        completed = Commitment.query.filter(Commitment.status == Commitment.STATUS_DONE).count()
+        completed = Commitment.query.filter(Commitment.status == Commitment.STATUS_COMPLETED).count()
         new_commits = Commitment.query.filter(Commitment.status == Commitment.STATUS_NEW).count()
         context['status_chart'] = {
             'labels': ['Mới', 'Đang thực hiện', 'Hoàn thành', 'Quá hạn'],
@@ -266,10 +295,15 @@ def dashboard():
         
         context['total'] = Commitment.query.filter(Commitment.lab_id.in_(lab_ids)).count()
         
-        context['ei_pending_review'] = ExecutionItem.query.join(Commitment).filter(
+        ei_pending = ExecutionItem.query.join(Commitment).filter(
             Commitment.lab_id.in_(lab_ids),
             ExecutionItem.status == ExecutionItem.STATUS_PENDING_REVIEW
         ).count()
+        commit_pending = Commitment.query.filter(
+            Commitment.lab_id.in_(lab_ids),
+            Commitment.status == Commitment.STATUS_PENDING_MANAGER
+        ).count()
+        context['ei_pending_review'] = ei_pending + commit_pending
         
         context['ei_needs_revision'] = ExecutionItem.query.join(Commitment).filter(
             Commitment.lab_id.in_(lab_ids),
@@ -285,13 +319,13 @@ def dashboard():
         context['waiting_submit'] = Commitment.query.filter(
             Commitment.lab_id.in_(lab_ids),
             Commitment.progress >= 100,
-            Commitment.status == Commitment.STATUS_DONE
+            Commitment.status == Commitment.STATUS_COMPLETED
         ).count()
         
-        context['pending_items'] = ExecutionItem.query.join(Commitment).filter(
+        context['pending_items'] = Commitment.query.filter(
             Commitment.lab_id.in_(lab_ids),
-            ExecutionItem.status == ExecutionItem.STATUS_PENDING_REVIEW
-        ).order_by(ExecutionItem.updated_at.desc()).all()
+            Commitment.status == Commitment.STATUS_PENDING_MANAGER
+        ).order_by(Commitment.updated_at.desc()).all()
 
     else:
         context['role_view'] = 'member'
@@ -919,15 +953,68 @@ def commitments_edit(commitment_id):
         commitment=commitment, labs=labs, action='Chỉnh sửa Cam kết'
     )
 
+@app.route('/commitments/<int:commitment_id>/assign', methods=['POST'])
+@login_required
+def commitment_assign(commitment_id):
+    """Assign a Lead and Collaborators to a Commitment."""
+    commitment = Commitment.query.get_or_404(commitment_id)
+
+    if not current_user.is_lab_manager_of(commitment.lab_id):
+        flash('Chỉ quản lý Lab mới có quyền phân công nhân sự.', 'danger')
+        return redirect(url_for('commitments_detail', commitment_id=commitment_id))
+
+    assignee_id = request.form.get('assignee_id', type=int) or None
+    collaborator_ids = request.form.getlist('collaborators')
+
+    old_assignee_id = commitment.assigned_to
+    commitment.assigned_to = assignee_id
+    
+    commitment.collaborators.clear()
+    if collaborator_ids:
+        collab_ids = [int(cid) for cid in collaborator_ids if cid.strip() and int(cid) != assignee_id]
+        if collab_ids:
+            collabs = User.query.filter(User.id.in_(collab_ids)).all()
+            for collab in collabs:
+                commitment.collaborators.append(collab)
+
+    db.session.commit()
+    
+    # Notify new assignee
+    if assignee_id and assignee_id != old_assignee_id:
+        title = "Phân công phụ trách cam kết"
+        msg = f"Bạn vừa được Quản lý Lab giao làm Phụ trách chính (Lead) cho cam kết: {commitment.code} - {commitment.title}."
+        link = url_for('commitments_detail', commitment_id=commitment.id, _external=False)
+        Notification.create(assignee_id, title, msg, 'info', link)
+        commitment.touch()
+        db.session.commit()
+
+    flash(f'Đã cập nhật phân công nhân sự cho cam kết {commitment.code}', 'success')
+    return redirect(url_for('commitments_detail', commitment_id=commitment_id))
+
 @app.route('/commitments/detail/<int:commitment_id>')
 @login_required
 def commitments_detail(commitment_id):
-    commitment = Commitment.query.get_or_404(commitment_id)
+    commitment = Commitment.query.get(commitment_id)
+    if not commitment:
+        flash('Cam kết này không còn tồn tại hoặc đã bị xóa.', 'warning')
+        return redirect(url_for('commitments_list'))
 
-    # Admin sees all; lab users only see their own lab's commitments
-    if not current_user.is_admin() and commitment.lab_id != current_user.lab_id:
-        flash('Bạn không có quyền xem cam kết này.', 'danger')
-        return redirect(url_for('dashboard'))
+    if not current_user.is_admin():
+        has_access = False
+        if current_user.lab_id == commitment.lab_id:
+            has_access = True
+        elif current_user.is_lab_manager_of(commitment.lab_id):
+            has_access = True
+        elif commitment.lab and commitment.lab.manager_id == current_user.id:
+            has_access = True
+        elif any(m.lab_id == commitment.lab_id for m in current_user.memberships.all()):
+            has_access = True
+        elif any(i.assigned_to == current_user.id for i in commitment.execution_items.all()):
+            has_access = True
+            
+        if not has_access:
+            flash('Bạn không có quyền xem cam kết này.', 'danger')
+            return redirect(url_for('dashboard'))
 
     updates = ProgressUpdate.query.filter_by(
         commitment_id=commitment_id).order_by(ProgressUpdate.created_at.desc()).all()
@@ -948,9 +1035,10 @@ def commitments_detail(commitment_id):
     lab_members = User.query.filter(User.id.in_(lab_member_ids)).order_by(User.username).all()
 
     # Can the current user manage execution items?
+    blocked_statuses = [Commitment.STATUS_PENDING_MANAGER, Commitment.STATUS_PENDING_ADMIN, Commitment.STATUS_COMPLETED, Commitment.STATUS_REJECTED]
     can_manage_ei = (
-        current_user.is_admin()
-        or current_user.is_lab_manager_of(commitment.lab_id)
+        current_user.id == commitment.assigned_to
+        and commitment.status not in blocked_statuses
     )
 
     return render_template(
@@ -966,9 +1054,12 @@ def commitments_detail(commitment_id):
         # Passed as a helper bool for the *current user* level; per-item
         # checks are still done in the route.
         can_update_ei=(
-            current_user.is_admin()
-            or current_user.is_lab_manager_of(commitment.lab_id)
-            or any(i.assigned_to == current_user.id for i in items)
+            commitment.status not in blocked_statuses
+            and (
+                current_user.is_lab_manager_of(commitment.lab_id)
+                or current_user.id == commitment.assigned_to
+                or any(i.assigned_to == current_user.id for i in items)
+            )
         ),
     )
 
@@ -997,12 +1088,11 @@ def commitments_delete(commitment_id):
 def _can_manage_ei(commitment):
     """Return True if current_user may create/edit/delete execution items
     for the given commitment.  Used inline in routes."""
+    blocked_statuses = [Commitment.STATUS_PENDING_MANAGER, Commitment.STATUS_PENDING_ADMIN, Commitment.STATUS_COMPLETED, Commitment.STATUS_REJECTED]
     return (
         current_user.is_authenticated
-        and (
-            current_user.is_admin()
-            or current_user.is_lab_manager_of(commitment.lab_id)
-        )
+        and current_user.id == commitment.assigned_to
+        and commitment.status not in blocked_statuses
     )
 
 
@@ -1217,14 +1307,18 @@ def ei_edit(item_id):
     )
 
 
-@app.route('/commitments/<int:commitment_id>/submit', methods=['POST'])
+@app.route('/commitments/<int:commitment_id>/submit-to-manager', methods=['POST'])
 @login_required
-def commitment_submit(commitment_id):
-    """Submit commitment for admin review."""
+def commitment_submit_to_manager(commitment_id):
+    """Lead User submits commitment for Lab Manager review."""
     commitment = Commitment.query.get_or_404(commitment_id)
 
-    if commitment.status == Commitment.STATUS_PENDING_ADMIN_REVIEW:
-        flash('Cam kết đã được gửi lên Admin từ trước.', 'warning')
+    if not (current_user.id == commitment.assigned_to or current_user.is_admin()):
+        flash('Bạn không có quyền thực hiện thao tác này.', 'danger')
+        return redirect(url_for('commitments_detail', commitment_id=commitment_id))
+
+    if commitment.status == Commitment.STATUS_PENDING_MANAGER:
+        flash('Cam kết đã được gửi lên Quản lý từ trước.', 'warning')
         return redirect(url_for('commitments_detail', commitment_id=commitment_id))
 
     is_valid, errors = commitment.validate_ready_for_submit(current_user)
@@ -1234,26 +1328,66 @@ def commitment_submit(commitment_id):
             flash(err, 'danger')
         return redirect(url_for('commitments_detail', commitment_id=commitment_id))
 
-    commitment.status = Commitment.STATUS_PENDING_ADMIN_REVIEW
+    commitment.status = Commitment.STATUS_PENDING_MANAGER
     commitment.submitted_by_id = current_user.id
     from app.utils import get_vn_time
     commitment.submitted_at = get_vn_time()
 
     ActivityLog.log(
         current_user.id, 'SUBMIT', 'Commitment', commitment_id,
-        f'Gửi cam kết {commitment.code} lên Admin kiểm duyệt',
+        f'Gửi cam kết {commitment.code} lên Quản lý duyệt',
         get_client_ip()
     )
     db.session.commit()
 
-    admins = User.query.filter_by(role='admin').all()
-    for ad in admins:
-        Notification.notify_commitment_submitted(commitment, ad.id)
+    if commitment.lab and commitment.lab.manager_id:
+        Notification.create(commitment.lab.manager_id, "Cam kết chờ xét duyệt", f"Cam kết '{commitment.code}' đang chờ bạn duyệt.", 'info', url_for('commitments_detail', commitment_id=commitment.id))
     db.session.commit()
 
-    flash('Đã gửi cam kết lên Admin để xét duyệt.', 'success')
+    flash('Đã gửi cam kết lên Quản lý Lab xét duyệt.', 'success')
     return redirect(url_for('commitments_detail', commitment_id=commitment_id))
 
+
+@app.route('/commitments/<int:commitment_id>/manager-review', methods=['POST'])
+@login_required
+def commitment_manager_review(commitment_id):
+    """Lab Manager reviews and submits to Admin or Rejects."""
+    commitment = Commitment.query.get_or_404(commitment_id)
+
+    if not (current_user.is_admin() or getattr(current_user, 'is_lab_manager_of', lambda x: False)(commitment.lab_id)):
+        flash('Chỉ có Quản lý Lab mới có quyền duyệt thao tác này.', 'danger')
+        return redirect(url_for('commitments_detail', commitment_id=commitment_id))
+
+    if commitment.status != Commitment.STATUS_PENDING_MANAGER:
+        flash('Cam kết không ở trạng thái chờ Quản lý duyệt.', 'warning')
+        return redirect(url_for('commitments_detail', commitment_id=commitment_id))
+
+    decision = request.form.get('decision')
+    note = request.form.get('review_note', '').strip()
+
+    from app.utils import get_vn_time
+    
+    if decision == 'approve':
+        commitment.status = Commitment.STATUS_PENDING_ADMIN
+        flash('Đã duyệt và chuyển tiếp lên Admin!', 'success')
+        
+        admins = User.query.filter_by(role='admin').all()
+        for ad in admins:
+            Notification.notify_commitment_submitted(commitment, ad.id)
+            
+    elif decision == 'reject':
+        commitment.status = Commitment.STATUS_ACTIVE
+        flash('Đã yêu cầu nhóm bổ sung tiến độ.', 'warning')
+        if commitment.assigned_to:
+            Notification.create(commitment.assigned_to, "Cam kết bị trả về", f"Quản lý Lab đã yêu cầu bổ sung cho cam kết '{commitment.code}'.", 'warning', url_for('commitments_detail', commitment_id=commitment.id))
+    
+    ActivityLog.log(
+        current_user.id, 'REVIEW', 'Commitment', commitment_id,
+        f'Quản lý duyệt cam kết {commitment.code} -> {decision}',
+        get_client_ip()
+    )
+    db.session.commit()
+    return redirect(url_for('commitments_detail', commitment_id=commitment_id))
 
 @app.route('/commitments/<int:commitment_id>/admin-review', methods=['GET', 'POST'])
 @login_required
@@ -1265,13 +1399,12 @@ def commitment_admin_review(commitment_id):
 
     commitment = Commitment.query.get_or_404(commitment_id)
 
-    if commitment.status != Commitment.STATUS_PENDING_ADMIN_REVIEW:
+    if commitment.status != Commitment.STATUS_PENDING_ADMIN:
         flash('Cam kết chưa được gửi lên hoặc không ở trạng thái chờ duyệt.', 'warning')
         return redirect(url_for('commitments_detail', commitment_id=commitment_id))
 
     allowed_decisions = [
-        Commitment.STATUS_APPROVED,
-        Commitment.STATUS_NEEDS_REVISION,
+        Commitment.STATUS_COMPLETED,
         Commitment.STATUS_REJECTED
     ]
 
@@ -1283,7 +1416,7 @@ def commitment_admin_review(commitment_id):
         if decision not in allowed_decisions:
             errors.append('Quyết định không hợp lệ.')
 
-        if decision in [Commitment.STATUS_NEEDS_REVISION, Commitment.STATUS_REJECTED] and not review_note:
+        if decision == Commitment.STATUS_REJECTED and not review_note:
             errors.append('Phải có lý do (nhận xét) khi yêu cầu sửa đổi hoặc từ chối.')
 
         if errors:
@@ -1309,6 +1442,7 @@ def commitment_admin_review(commitment_id):
             f'Admin duyệt cam kết {commitment.code}: {old_status} → {decision}',
             get_client_ip()
         )
+        commitment.touch()
         db.session.commit()
 
         if commitment.lab and commitment.lab.manager_id:
@@ -1348,6 +1482,7 @@ def ei_delete(item_id):
         f'Xóa hạng mục "{title}" khỏi cam kết {commitment.code}',
         get_client_ip()
     )
+    commitment.touch()
     db.session.commit()
     flash(f'Đã xóa hạng mục "{title}".', 'success')
     return redirect(url_for('commitments_detail', commitment_id=commitment_id))
@@ -1444,15 +1579,26 @@ def ei_update(item_id):
 
     # ---- Authorization --------------------------------------------------- #
     is_assignee = (item.assigned_to == current_user.id)
-    is_manager  = current_user.is_lab_manager_of(commitment.lab_id)
-    if not (current_user.is_admin() or is_manager or is_assignee):
-        flash('Bạn không có quyền cập nhật hạng mục này.', 'danger')
+    is_lead = (current_user.id == commitment.assigned_to)
+    is_manager = current_user.is_lab_manager_of(commitment.lab_id)
+    
+    if not (current_user.is_admin() or is_lead or is_assignee or is_manager):
+        flash('Bạn không có quyền truy cập hạng mục này.', 'danger')
         return redirect(url_for('commitments_detail', commitment_id=commitment.id))
 
-    # Already completed / rejected – block further updates from regular members
-    if item.status in (ExecutionItem.STATUS_COMPLETED, ExecutionItem.STATUS_REJECTED):
-        if not (current_user.is_admin() or is_manager):
-            flash('Hạng mục này đã kết thúc. Liên hệ quản lý nếu cần mở lại.', 'warning')
+    if request.method == 'POST':
+        blocked_statuses = [Commitment.STATUS_PENDING_MANAGER, Commitment.STATUS_PENDING_ADMIN, Commitment.STATUS_COMPLETED, Commitment.STATUS_REJECTED]
+        if commitment.status in blocked_statuses:
+            flash('Cam kết đang chờ duyệt hoặc đã đóng. Không thể cập nhật hạng mục.', 'warning')
+            return redirect(url_for('commitments_detail', commitment_id=commitment.id))
+
+        if not is_assignee:
+            flash('Chỉ người được giao phân công mới có quyền ghi nhận tiến độ.', 'danger')
+            return redirect(url_for('commitments_detail', commitment_id=commitment.id))
+
+        # Already completed / rejected – block further updates from regular members
+        if item.status in (ExecutionItem.STATUS_COMPLETED, ExecutionItem.STATUS_REJECTED):
+            flash('Hạng mục này đã kết thúc. Liên hệ Phụ trách chính để báo cáo.', 'warning')
             return redirect(url_for('commitments_detail', commitment_id=commitment.id))
 
     # Eligible statuses for this user strictly bounded by the centralized policy
@@ -1463,7 +1609,6 @@ def ei_update(item_id):
         new_status  = request.form.get('new_status', '').strip()
         note        = request.form.get('note', '').strip() or None
         blocker_reason = request.form.get('blocker_reason', '').strip() or None
-        finish_str  = request.form.get('expected_finish_date', '').strip()
 
         # --- Validation --------------------------------------------------- #
         is_valid, transition_err = item.can_transition_execution_item(current_user, new_status, is_review=False)
@@ -1478,12 +1623,12 @@ def ei_update(item_id):
         if new_status == ExecutionItem.STATUS_NEEDS_REVISION and not blocker_reason:
             errors.append('Phải nêu lý do khi trạng thái là “Cần sửa”.')
 
-        expected_finish = None
-        if finish_str:
-            try:
-                expected_finish = datetime.strptime(finish_str, '%Y-%m-%dT%H:%M')
-            except ValueError:
-                errors.append('Ngày dự kiến không hợp lệ.')
+        evidence_files = request.files.getlist('evidence_files')
+        has_new_files = any(f and f.filename for f in evidence_files)
+
+        if new_status in (ExecutionItem.STATUS_PENDING_REVIEW, ExecutionItem.STATUS_COMPLETED):
+            if item.requires_evidence and not item.has_required_evidence() and not has_new_files:
+                errors.append('Hạng mục này bắt buộc phải đính kèm file minh chứng trước khi xin duyệt hoặc báo cáo hoàn thành.')
 
         if errors:
             for err in errors:
@@ -1504,7 +1649,6 @@ def ei_update(item_id):
             new_status=new_status,
             note=note,
             blocker_reason=blocker_reason,
-            expected_finish_date=expected_finish,
         )
         db.session.add(record)
         db.session.flush()
@@ -1539,9 +1683,6 @@ def ei_update(item_id):
 
         # Update the item's current status
         item.status = new_status
-        # If the member provided an expected finish date, store it on the item too
-        if expected_finish:
-            item.expected_finish_date = expected_finish
 
         # Recalculate parent Commitment progress from all items
         commitment.recalculate_progress()
@@ -1552,14 +1693,13 @@ def ei_update(item_id):
             f'Cập nhật [{item.id}] "{item.title}": {old_status} → {new_status}',
             get_client_ip()
         )
+        commitment.touch()
         db.session.commit()
 
         if new_status == ExecutionItem.STATUS_PENDING_REVIEW:
-            if commitment.lab and commitment.lab.manager_id:
-                Notification.notify_ei_pending_review(item, commitment.lab.manager_id)
-            admins = User.query.filter_by(role='admin').all()
-            for ad in admins:
-                Notification.notify_ei_pending_review(item, ad.id)
+            lead_id = commitment.assigned_to
+            if lead_id and lead_id != current_user.id:
+                Notification.notify_ei_pending_review(item, lead_id)
             db.session.commit()
 
         flash(f'Hạng mục "{item.title}" đã được cập nhật.', 'success')
@@ -1634,6 +1774,7 @@ def ei_review(item_id):
             f'Đánh giá [{item.id}] "{item.title}": {old_status} → {decision}',
             get_client_ip()
         )
+        commitment.touch()
         db.session.commit()
 
         if item.assigned_to:
@@ -1661,7 +1802,7 @@ def progress_update(commitment_id):
 
 # ============== FILE DOWNLOAD ROUTES ==============
 
-@app.route('/uploads/<filename>')
+@app.route('/uploads/<path:filename>')
 @login_required
 def download_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
@@ -2074,18 +2215,44 @@ def api_stats():
 @login_required
 def api_timeline(commitment_id):
     commitment = Commitment.query.get_or_404(commitment_id)
-    updates = ProgressUpdate.query.filter_by(commitment_id=commitment_id).order_by(ProgressUpdate.created_at).all()
-
+    items = commitment.execution_items.all()
+    
+    total_weight = sum(i.weight for i in items if i.status != ExecutionItem.STATUS_REJECTED)
+    if total_weight == 0:
+        total_weight = 1 # Avoid division by zero
+        
     timeline = [{
         'date': commitment.start_date.isoformat(),
         'progress': 0,
-        'note': 'Bắt đầu'
+        'note': 'Bắt đầu dự án'
     }]
-    timeline.extend([{
-        'date': u.created_at.isoformat(),
-        'progress': u.progress,
-        'note': u.notes
-    } for u in updates])
+    
+    # Collect completed events
+    completed_events = []
+    from app.models import ExecutionItemUpdate
+    for item in items:
+        if item.status == ExecutionItem.STATUS_COMPLETED:
+            # Find the update that changed it to completed
+            update = item.updates.filter_by(new_status=ExecutionItem.STATUS_COMPLETED).order_by(ExecutionItemUpdate.created_at.asc()).first()
+            if update:
+                completed_events.append({
+                    'date': update.created_at,
+                    'weight': item.weight,
+                    'title': item.title
+                })
+                
+    # Sort events by date
+    completed_events.sort(key=lambda x: x['date'])
+    
+    current_progress = 0
+    for ev in completed_events:
+        current_progress += (ev['weight'] / total_weight) * 100
+        progress_val = min(100, int(round(current_progress)))
+        timeline.append({
+            'date': ev['date'].isoformat(),
+            'progress': progress_val,
+            'note': f"Hoàn thành: {ev['title']}"
+        })
 
     return jsonify(timeline)
 

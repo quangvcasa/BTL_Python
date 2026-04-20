@@ -43,7 +43,7 @@
                         {% endif %}
                     </div>
                     <div class="col-md-6">
-                        <strong>Người phụ trách:</strong>
+                        <strong>Phụ trách chính (Lead):</strong>
                         {% if commitment.assignee %}
                         <span class="badge bg-info ms-1">{{ commitment.assignee.username }}</span>
                         {% if commitment.assignee.full_name %}
@@ -51,6 +51,23 @@
                         {% endif %}
                         {% else %}
                         <span class="text-muted ms-1 fst-italic">Chưa phân công</span>
+                        {% endif %}
+
+                        {% if commitment.collaborators|length > 0 %}
+                        <div class="mt-2">
+                            <strong>Người phối hợp:</strong>
+                            {% for col in commitment.collaborators %}
+                            <span class="badge bg-secondary ms-1">{{ col.username }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if current_user.is_lab_manager_of(commitment.lab_id) %}
+                        <div class="mt-2">
+                           <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#assignModal">
+                               <i class="fas fa-users-cog"></i> Phân công nhân sự
+                           </button>
+                        </div>
                         {% endif %}
                     </div>
                 </div>
@@ -88,7 +105,7 @@
                     </div>
                 </div>
 
-                {% if commitment.status == 'Chờ admin duyệt' and commitment.submitter %}
+                {% if commitment.status == 'pending_admin' and commitment.submitter %}
                 <div class="alert alert-info mt-4 mb-0 py-2">
                     <i class="fas fa-paper-plane me-2"></i><strong>Đã gửi Admin duyệt</strong>
                     <br><small>Bởi <strong>{{ commitment.submitter.display_name() }}</strong> vào lúc {{ commitment.submitted_at.strftime('%d/%m/%Y %H:%M') }}</small>
@@ -96,8 +113,8 @@
                 {% endif %}
 
                 {% if commitment.reviewer %}
-                <div class="alert mt-3 mb-0 py-2 {% if commitment.status == 'Đã nghiệm thu' %}alert-success{% elif commitment.status == 'Yêu cầu sửa đổi' %}alert-warning{% else %}alert-danger{% endif %}">
-                    <i class="fas fa-gavel me-2"></i><strong>Quyết định từ Admin: {{ commitment.status }}</strong>
+                <div class="alert mt-3 mb-0 py-2 {% if commitment.status == 'completed' %}alert-success{% elif commitment.status == 'needs_revision' %}alert-warning{% else %}alert-danger{% endif %}">
+                    <i class="fas fa-gavel me-2"></i><strong>Quyết định từ Admin: {{ commitment.get_status_label() }}</strong>
                     <br><small>Ban hành bởi <strong>{{ commitment.reviewer.display_name() }}</strong> lúc {{ commitment.reviewed_at.strftime('%d/%m/%Y %H:%M') }}</small>
                     {% if commitment.admin_review_note %}
                     <hr class="my-2">
@@ -106,44 +123,59 @@
                 </div>
                 {% endif %}
             </div>
+            </div>
             <div class="card-footer d-flex gap-2 flex-wrap">
-                {% if can_manage_ei %}
-                    {% if commitment.status != 'Chờ admin duyệt' %}
-                    <form action="{{ url_for('commitment_submit', commitment_id=commitment.id) }}"
+                {# --- LEAD USER ACTION --- #}
+                {% set is_lead = (current_user.id == commitment.assigned_to) %}
+                {% if is_lead and commitment.status == 'active' %}
+                    <form action="{{ url_for('commitment_submit_to_manager', commitment_id=commitment.id) }}"
                           method="POST" class="d-inline"
-                          onsubmit="return confirm('Bạn có chắc chắn muốn gửi cam kết này cho Admin duyệt? Kiểm tra kỹ các hạng mục trước khi gửi.');">
+                          onsubmit="return confirm('Gửi kết quả cho Quản lý Lab kiểm tra?');">
                         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-warning text-dark fw-bold">
-                            <i class="fas fa-paper-plane me-2"></i>Gửi Admin Duyệt
+                        <button type="submit" class="btn btn-info text-dark fw-bold">
+                            <i class="fas fa-paper-plane me-2"></i>Gửi Quản lý phê duyệt
                         </button>
                     </form>
-                    {% else %}
-                    <button type="button" class="btn btn-outline-secondary" disabled>
-                        <i class="fas fa-paper-plane me-2"></i>Đã Gửi Duyệt
-                    </button>
+                {% endif %}
+
+                {# --- LAB MANAGER ACTION --- #}
+                {% if current_user.is_lab_manager_of(commitment.lab_id) %}
+                    {% if commitment.status == 'pending_manager' %}
+                    <form action="{{ url_for('commitment_manager_review', commitment_id=commitment.id) }}"
+                          method="POST" class="d-inline d-flex gap-2"
+                          onsubmit="return confirm('Bạn có chắc chắn thực hiện đánh giá này?');">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" name="decision" value="approve" class="btn btn-primary fw-bold">
+                            <i class="fas fa-check-double me-2"></i>Duyệt & Gửi Admin
+                        </button>
+                        <button type="submit" name="decision" value="reject" class="btn btn-warning fw-bold">
+                            <i class="fas fa-undo me-2"></i>Trả về bổ sung
+                        </button>
+                    </form>
                     {% endif %}
                 {% endif %}
 
+                {# --- ADMIN ACTION --- #}
                 {% if current_user.is_admin() %}
-                    {% if commitment.status == 'Chờ admin duyệt' %}
+                    {% if commitment.status == 'pending_admin' %}
                     <a href="{{ url_for('commitment_admin_review', commitment_id=commitment.id) }}"
                        class="btn btn-success text-dark fw-bold">
-                        <i class="fas fa-gavel me-2"></i>Kiểm duyệt Cam kết
+                        <i class="fas fa-gavel me-2"></i>Nghiệm thu cuối cùng
                     </a>
                     {% endif %}
 
-                <a href="{{ url_for('commitments_edit', commitment_id=commitment.id) }}"
-                   class="btn btn-primary">
-                    <i class="fas fa-edit me-2"></i>Chỉnh sửa
-                </a>
-                <form action="{{ url_for('commitments_delete', commitment_id=commitment.id) }}"
-                      method="POST" class="d-inline"
-                      onsubmit="return confirm('Xóa cam kết này? Hành động không thể hoàn tác.');">
-                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-danger">
-                        <i class="fas fa-trash me-2"></i>Xóa
-                    </button>
-                </form>
+                    <a href="{{ url_for('commitments_edit', commitment_id=commitment.id) }}"
+                       class="btn btn-primary">
+                        <i class="fas fa-edit me-2"></i>Chỉnh sửa
+                    </a>
+                    <form action="{{ url_for('commitments_delete', commitment_id=commitment.id) }}"
+                          method="POST" class="d-inline"
+                          onsubmit="return confirm('Xóa cam kết này? Hành động không thể hoàn tác.');">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-trash me-2"></i>Xóa
+                        </button>
+                    </form>
                 {% endif %}
             </div>
         </div>
@@ -176,7 +208,7 @@
                                 <th>Giao cho</th>
                                 <th>Cờ</th>
                                 <th>Cập nhật gần nhất</th>
-                                {% if can_update_ei %}<th></th>{% endif %}
+                                {% if can_update_ei or current_user.is_admin() %}<th></th>{% endif %}
                                 {% if can_manage_ei %}<th></th>{% endif %}
                             </tr>
                         </thead>
@@ -244,17 +276,15 @@
                                     <span class="text-muted fst-italic">Chua co</span>
                                     {% endif %}
                                 </td>
-                                {% if can_update_ei and
-                                      (current_user.is_admin() or
-                                       current_user.is_lab_manager_of(commitment.lab_id) or
-                                       item.assigned_to == current_user.id) %}
+                                {% set can_access_this_item = current_user.is_admin() or current_user.is_lab_manager_of(commitment.lab_id) or current_user.id == commitment.assigned_to or item.assigned_to == current_user.id %}
+                                {% if can_access_this_item %}
                                 <td>
                                     <a href="{{ url_for('ei_update', item_id=item.id) }}"
-                                       class="btn btn-sm btn-outline-primary" title="Cap nhat tien do">
-                                        <i class="fas fa-edit"></i>
+                                       class="btn btn-sm btn-outline-primary" title="Chi tiết">
+                                        <i class="fas fa-folder-open"></i>
                                     </a>
                                 </td>
-                                {% elif can_update_ei %}
+                                {% elif can_update_ei or current_user.is_admin() %}
                                 <td></td>
                                 {% endif %}
                                 {% if can_manage_ei %}
@@ -306,51 +336,6 @@
             </div>
         </div>
 
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-history me-2"></i>Lịch sử tiến độ dự án <span class="badge bg-secondary">Legacy</span>
-                </h5>
-                <small class="text-muted mt-2 d-block">
-                    <i>Ghi chú: Lịch sử bên dưới thuộc về quy trình cũ và không thể hiện cập nhật của các Hạng mục. Xem lịch sử chi tiết cho từng Hạng mục trên bảng <strong>Hạng mục thực hiện</strong>.</i>
-                </small>
-            </div>
-            <div class="card-body">
-                {% if updates %}
-                <div class="timeline">
-                    {% for update in updates %}
-                    <div class="timeline-item">
-                        <div class="timeline-marker bg-{{ 'success' if update.progress >= commitment.progress else 'primary' }}"></div>
-                        <div class="timeline-content">
-                            <div class="d-flex justify-content-between">
-                                <strong>{{ update.progress }}%</strong>
-                                <small class="text-muted">{{ update.created_at.strftime('%d/%m/%Y %H:%M') }}</small>
-                            </div>
-                            <p class="mb-1">{{ update.notes or 'Không có ghi chú' }}</p>
-                            <small class="text-muted">
-                                <i class="fas fa-user me-1"></i>{{ update.creator.username }}
-                            </small>
-                            {% if update.attachment %}
-                            <div class="mt-2">
-                                <a href="{{ url_for('download_file', filename=update.attachment) }}"
-                                   class="btn btn-outline-secondary btn-sm"
-                                   title="Tải xuống tệp đính kèm">
-                                    <i class="fas fa-paperclip me-1"></i>{{ update.attachment.split('_', 1)[1] if '_' in update.attachment else update.attachment }}
-                                </a>
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <p class="text-center text-muted">
-                    <i class="fas fa-inbox fa-2x mb-2"></i><br>
-                    Chưa có cập nhật nào
-                </p>
-                {% endif %}
-            </div>
-        </div>
     </div>
 
     <div class="col-lg-4">
@@ -368,11 +353,11 @@
                     </div>
                     <div class="d-flex justify-content-between mb-2">
                         <span>Cập nhật lần cuối:</span>
-                        <strong>{{ commitment.updated_at.strftime('%d/%m/%Y') }}</strong>
+                        <strong>{{ commitment.updated_at.strftime('%d/%m/%Y %H:%M') }}</strong>
                     </div>
                     <div class="d-flex justify-content-between">
                         <span>Số lần cập nhật:</span>
-                        <strong>{{ updates|length }}</strong>
+                        <strong>{{ commitment.update_count }}</strong>
                     </div>
                 </div>
             </div>
@@ -381,7 +366,7 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">
-                    <i class="fas fa-chart-line me-2"></i>Biểu đồ tiến độ gốc <span class="badge bg-secondary">Legacy</span>
+                    <i class="fas fa-chart-line me-2"></i>Tiến độ dự án
                 </h5>
             </div>
             <div class="card-body">
@@ -390,6 +375,48 @@
         </div>
     </div>
 </div>
+
+{% if current_user.is_lab_manager_of(commitment.lab_id) %}
+<!-- Assignment Modal -->
+<div class="modal fade" id="assignModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form action="{{ url_for('commitment_assign', commitment_id=commitment.id) }}" method="POST">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-header">
+          <h5 class="modal-title">Phân công nhân sự</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+            <div class="mb-3">
+                <label class="form-label fw-bold">Phụ trách chính (Lead)</label>
+                <select name="assignee_id" class="form-select">
+                    <option value="">-- Chưa chọn --</option>
+                    {% for m in lab_members %}
+                        <option value="{{ m.id }}" {% if commitment.assigned_to == m.id %}selected{% endif %}>{{ m.username }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-bold">Người phối hợp</label>
+                <select name="collaborators" class="form-select" multiple style="height: 120px;">
+                    {% set collab_ids = commitment.collaborators|map(attribute='id')|list %}
+                    {% for m in lab_members %}
+                        <option value="{{ m.id }}" {% if m.id in collab_ids %}selected{% endif %}>{{ m.username }}</option>
+                    {% endfor %}
+                </select>
+                <small class="text-muted">Giữ Ctrl hoặc Shift để chọn nhiều.</small>
+            </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+          <button type="submit" class="btn btn-primary">Lưu Phân công</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}

@@ -57,14 +57,42 @@
                         </a>
                     </li>
                     {% endif %}
-                    <li class="nav-item">
-                        <a class="nav-link position-relative" href="{{ url_for('notifications') }}">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle position-relative" href="#" data-bs-toggle="dropdown" id="notifDropdown" aria-expanded="false">
                             <i class="fas fa-bell me-1"></i>Thông báo
                             <span id="notif-badge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
                                   style="font-size:0.6em; display:none;">
                                 0
                             </span>
                         </a>
+                        <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="notifDropdown" style="width: 320px; max-height: 400px; overflow-y: auto;">
+                            <li><h6 class="dropdown-header">Thông báo mới nhất</h6></li>
+                            {% for notif in recent_notifications %}
+                            <li>
+                                <a class="dropdown-item {% if not notif.is_read %}bg-light border-start border-primary border-3{% endif %}" href="{{ url_for('read_notification', id=notif.id) }}" style="white-space: normal;">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <small class="text-muted"><i class="fas fa-clock me-1"></i>{{ notif.created_at.strftime('%d/%m %H:%M') }}</small>
+                                    </div>
+                                    <span class="d-block text-truncate fw-bold">
+                                        {% if notif.type == 'danger' %}
+                                        <i class="fas fa-exclamation-circle text-danger me-1"></i>
+                                        {% elif notif.type == 'warning' %}
+                                        <i class="fas fa-exclamation-triangle text-warning me-1"></i>
+                                        {% elif notif.type == 'success' %}
+                                        <i class="fas fa-check-circle text-success me-1"></i>
+                                        {% else %}
+                                        <i class="fas fa-info-circle text-info me-1"></i>
+                                        {% endif %}
+                                        {{ notif.title }}
+                                    </span>
+                                </a>
+                            </li>
+                            {% else %}
+                            <li><span class="dropdown-item text-center text-muted">Không có thông báo mới</span></li>
+                            {% endfor %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-center text-primary fw-bold" href="{{ url_for('notifications_list') }}">Xem tất cả</a></li>
+                        </ul>
                     </li>
                 </ul>
                 <ul class="navbar-nav">

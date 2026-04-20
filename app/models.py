@@ -3,6 +3,7 @@ from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 from app.utils import get_vn_time
+from flask import url_for, has_request_context
 
 db = SQLAlchemy()
 
@@ -130,20 +131,42 @@ class Lab(db.Model):
         """Return the LabMembership row for the manager, or None."""
         return self.memberships.filter_by(role_in_lab='manager').first()
 
+commitment_collaborators = db.Table('commitment_collaborators',
+    db.Column('commitment_id', db.Integer, db.ForeignKey('commitments.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+)
+
 class Commitment(db.Model):
     __tablename__ = 'commitments'
 
     # Status values (single source of truth)
-    STATUS_NEW       = 'Mới'            # created, no lab action yet
-    STATUS_ASSIGNED  = 'Đã phân công'   # lab assigned, waiting for execution
-    STATUS_ACTIVE    = 'Đang thực hiện'  # progress > 0
-    STATUS_DONE      = 'Hoàn thành'      # progress >= 100
-    STATUS_OVERDUE   = 'Quá hạn'         # deadline passed, not done
-    STATUS_AT_RISK   = 'Có rủi ro'       # any child in needs_revision/overdue
-    STATUS_PENDING_ADMIN_REVIEW = 'Chờ admin duyệt'
-    STATUS_APPROVED  = 'Đã nghiệm thu'
-    STATUS_NEEDS_REVISION = 'Yêu cầu sửa đổi'
-    STATUS_REJECTED  = 'Từ chối'
+    STATUS_NEW             = 'new'
+    STATUS_ACTIVE          = 'active'
+    STATUS_OVERDUE         = 'overdue'
+    STATUS_PENDING_MANAGER = 'pending_manager'
+    STATUS_PENDING_ADMIN   = 'pending_admin'
+    STATUS_COMPLETED       = 'completed'
+    STATUS_REJECTED        = 'rejected'
+    
+    STATUS_LABELS = {
+        STATUS_NEW: 'Mới',
+        STATUS_ACTIVE: 'Đang thực hiện',
+        STATUS_OVERDUE: 'Quá hạn',
+        STATUS_PENDING_MANAGER: 'Chờ quản lý duyệt',
+        STATUS_PENDING_ADMIN: 'Chờ Admin duyệt',
+        STATUS_COMPLETED: 'Đã hoàn thành',
+        STATUS_REJECTED: 'Từ chối'
+    }
+
+    STATUS_COLORS = {
+        STATUS_NEW: 'secondary',
+        STATUS_ACTIVE: 'primary',
+        STATUS_OVERDUE: 'danger',
+        STATUS_PENDING_MANAGER: 'info',
+        STATUS_PENDING_ADMIN: 'warning',
+        STATUS_COMPLETED: 'success',
+        STATUS_REJECTED: 'danger'
+    }
 
     PRIORITY_LOW     = 'Thấp'
     PRIORITY_MEDIUM  = 'Trung bình'
@@ -164,10 +187,11 @@ class Commitment(db.Model):
     start_date = db.Column(db.DateTime, nullable=False)
     deadline = db.Column(db.DateTime, nullable=False)
     progress = db.Column(db.Integer, default=0)  # 0–100
-    status = db.Column(db.String(20), default='Mới')
+    status = db.Column(db.String(30), default=STATUS_NEW)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=get_vn_time)
     updated_at = db.Column(db.DateTime, default=get_vn_time, onupdate=get_vn_time)
+    update_count = db.Column(db.Integer, default=0, nullable=False, server_default='0')
     submitted_by_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     submitted_at = db.Column(db.DateTime, nullable=True)
     admin_review_note = db.Column(db.Text, nullable=True)
@@ -176,6 +200,7 @@ class Commitment(db.Model):
 
     creator = db.relationship('User', foreign_keys=[created_by], backref='commitments_created')
     assignee = db.relationship('User', foreign_keys=[assigned_to], backref='tasks_assigned')
+    collaborators = db.relationship('User', secondary=commitment_collaborators, backref=db.backref('collaborations', lazy='dynamic'))
     submitter = db.relationship('User', foreign_keys=[submitted_by_id], backref='commitments_submitted')
     reviewer = db.relationship('User', foreign_keys=[reviewed_by_id], backref='commitments_reviewed')
     progress_updates = db.relationship('ProgressUpdate', backref='commitment', lazy=True, cascade='all, delete-orphan')
@@ -193,100 +218,70 @@ class Commitment(db.Model):
         next_id = (last.id + 1) if last else 1
         return f'CAM-{next_id:04d}'
 
-    def recalculate_progress(self):
-        """Derive Commitment.progress and Commitment.status from child ExecutionItems.
-
-        Weight-based formula:
-            progress = floor( sum(weight of COMPLETED items) / sum(all weights) * 100 )
-
-        Status derivation (in priority order):
-          1. 'Quá hạn'       — deadline passed and not yet 100 %
-          2. 'Hoàn thành'    — all items completed (progress == 100)
-          3. 'Có rủi ro'     — any item in needs_revision or overdue
-          4. 'Đang thực hiện' — at least one item has started
-          5. 'Đã phân công'  — items exist but none started
-          6. 'Mới'           — no items yet
-        """
+    def touch(self):
+        """Manually trigger an update to the commitment's timestamp and counter."""
         from app.utils import get_vn_time
-        now    = get_vn_time()
-        items  = self.execution_items.all()
+        self.update_count = (self.update_count or 0) + 1
+        self.updated_at = get_vn_time()
+
+    def recalculate_progress(self):
+        """Derive Commitment.progress and Commitment.status from child ExecutionItems."""
+        from app.utils import get_vn_time
+        items = self.execution_items.all()
 
         if not items:
-            # No items – fall back to deadline-only logic
             self.progress = 0
-            if self.deadline < now:
-                self.status = self.STATUS_OVERDUE
-            elif self.assigned_to:
-                self.status = self.STATUS_ASSIGNED
-            else:
+            if getattr(self, 'status', None) not in [self.STATUS_PENDING_MANAGER, self.STATUS_PENDING_ADMIN, self.STATUS_COMPLETED, self.STATUS_REJECTED]:
                 self.status = self.STATUS_NEW
             return
 
         total_weight     = sum(i.weight for i in items if i.status != ExecutionItem.STATUS_REJECTED)
-        completed_weight = sum(
-            i.weight for i in items
-            if i.status == ExecutionItem.STATUS_COMPLETED
-        )
+        completed_weight = sum(i.weight for i in items if i.status == ExecutionItem.STATUS_COMPLETED)
 
         if total_weight > 0:
-            raw = (completed_weight / total_weight) * 100
-            self.progress = min(100, int(round(raw)))
+            self.progress = min(100, int(round((completed_weight / total_weight) * 100)))
         else:
             self.progress = 0
 
-        # ---- Status derivation ------------------------------------------- #
         statuses = {i.status for i in items}
         all_done = all(i.status in (ExecutionItem.STATUS_COMPLETED, ExecutionItem.STATUS_REJECTED) for i in items)
-        any_at_risk = bool(
-            statuses & {
-                ExecutionItem.STATUS_NEEDS_REVISION,
-                ExecutionItem.STATUS_OVERDUE,
-            }
-        )
-        any_started = bool(
-            statuses - {
-                ExecutionItem.STATUS_NOT_STARTED,
-            }
-        )
+        any_started = bool(statuses - {ExecutionItem.STATUS_NOT_STARTED})
 
         terminal_admin_statuses = {
-            self.STATUS_PENDING_ADMIN_REVIEW,
-            self.STATUS_APPROVED,
-            self.STATUS_NEEDS_REVISION,
+            self.STATUS_PENDING_MANAGER,
+            self.STATUS_PENDING_ADMIN,
+            self.STATUS_COMPLETED,
             self.STATUS_REJECTED
         }
 
         if getattr(self, 'status', None) in terminal_admin_statuses:
-            if self.status == self.STATUS_NEEDS_REVISION and (any_started or any_at_risk):
-                self.status = self.STATUS_ACTIVE
-            else:
-                pass # Keep admin review status, skip auto status assignment
-        elif self.deadline < now and not all_done:
-            self.status = self.STATUS_OVERDUE
-        elif all_done:
-            self.status = self.STATUS_DONE
-        elif any_at_risk:
-            self.status = self.STATUS_AT_RISK
-        elif any_started:
+            pass # Keep review status, prevent auto status reassignment during approval chain
+        elif any_started or all_done:
             self.status = self.STATUS_ACTIVE
         else:
-            self.status = self.STATUS_ASSIGNED  # items exist, none started
+            self.status = self.STATUS_NEW
+
+    @property
+    def is_overdue(self):
+        from app.utils import get_vn_time
+        return self.status not in (self.STATUS_COMPLETED, self.STATUS_REJECTED) and self.deadline < get_vn_time()
+
+    @property
+    def is_at_risk(self):
+        return any(i.status in (ExecutionItem.STATUS_NEEDS_REVISION, ExecutionItem.STATUS_OVERDUE) for i in self.execution_items.all())
 
     def update_status(self):
         """Deprecated shim – now delegates to recalculate_progress().
         Kept so existing call sites (e.g. legacy progress_update route) don’t crash.
         """
         self.recalculate_progress()
+        
+    def get_status_label(self):
+        return self.STATUS_LABELS.get(self.status, self.status)
 
     def get_status_color(self):
-        """Return a Bootstrap colour class for the current status."""
-        return {
-            self.STATUS_DONE:     'success',
-            self.STATUS_OVERDUE:  'danger',
-            self.STATUS_ACTIVE:   'primary',
-            self.STATUS_ASSIGNED: 'info',
-            self.STATUS_AT_RISK:  'warning',
-        }.get(self.status, 'secondary')
+        return self.STATUS_COLORS.get(self.status, 'secondary')
+
 
     def get_priority_color(self):
         return {
@@ -301,9 +296,10 @@ class Commitment(db.Model):
         Returns (is_valid: bool, errors: list[str])
         """
         errors = []
+        is_lead = actor.id == self.assigned_to
         is_manager = actor.is_admin() or getattr(actor, 'is_lab_manager_of', lambda x: False)(self.lab_id)
-        if not is_manager:
-            errors.append("Chỉ quản lý Lab hoặc Admin mới có quyền gửi Cam kết cho Admin duyệt.")
+        if not (is_manager or is_lead):
+            errors.append("Chỉ Phụ trách chính, Quản lý Lab hoặc Admin mới có quyền gửi xác nhận tiến độ này.")
 
         items = self.execution_items.all()
         if not items:
@@ -432,15 +428,18 @@ class ExecutionItem(db.Model):
         Centralized workflow validation state machine.
         Returns (is_valid, error_reason)
         """
-        is_manager = actor.is_admin() or getattr(actor, 'is_lab_manager_of', lambda x: False)(self.commitment.lab_id)
+        is_lead = actor.id == self.commitment.assigned_to
+
+        if not is_review and target_status == self.STATUS_NOT_STARTED:
+            return False, "Trạng thái này chỉ dùng làm mặc định. Hãy chọn trạng thái khác để ghi nhận tiến độ."
 
         # Allow keeping current status strictly to append notes (unless in explicit review mode)
         if not is_review and target_status == self.status:
             return True, ""
 
         if is_review:
-            if not is_manager:
-                return False, "Chỉ quản lý hoặc Admin mới có quyền đánh giá."
+            if not is_lead:
+                return False, "Chỉ Phụ trách chính (Lead) hoặc Admin mới có quyền đánh giá hạng mục."
             if self.status != self.STATUS_PENDING_REVIEW:
                 return False, "Chỉ có thể đánh giá khi đang ở trạng thái Chờ duyệt."
             if target_status not in [self.STATUS_COMPLETED, self.STATUS_NEEDS_REVISION, self.STATUS_REJECTED]:
@@ -452,18 +451,18 @@ class ExecutionItem(db.Model):
             return False, "Không thể chủ động thiết lập trạng thái 'Từ chối' khi cập nhật tiến độ."
 
         if target_status == self.STATUS_NEEDS_REVISION:
-            return False, "Trạng thái 'Cần sửa' chỉ được thiết lập bởi quản lý trong vòng đánh giá."
+            return False, "Trạng thái 'Cần sửa' chỉ được thiết lập bởi Phụ trách chính trong vòng đánh giá."
 
         # Reopen terminal states
         if self.status in [self.STATUS_COMPLETED, self.STATUS_REJECTED]:
-            if not is_manager:
-                return False, "Hạng mục đã kết thúc. Vui lòng liên hệ quản lý để mở lại."
+            if not is_lead:
+                return False, "Hạng mục đã kết thúc. Vui lòng liên hệ Phụ trách chính để mở lại."
             if target_status not in [self.STATUS_IN_PROGRESS, self.STATUS_PENDING_REVIEW]:
                  return False, "Chỉ có thể mở lại chuyển qua 'Đang làm' hoặc 'Chờ duyệt'."
             return True, ""
 
         # Normal Working States
-        if target_status in [self.STATUS_NOT_STARTED, self.STATUS_IN_PROGRESS, self.STATUS_PENDING_REVIEW]:
+        if target_status in [self.STATUS_IN_PROGRESS, self.STATUS_PENDING_REVIEW]:
             return True, ""
 
         if target_status == self.STATUS_COMPLETED:
@@ -598,21 +597,21 @@ class Notification(db.Model):
     def notify_lab_assignment(commitment, manager_id):
         title = "Cam kết mới được giao"
         message = f"Lab của bạn vừa nhận được cam kết mới: [{commitment.code}] {commitment.title}."
-        link = f"/commitments/{commitment.id}"
+        link = url_for('commitments_detail', commitment_id=commitment.id, _external=False)
         return Notification.create(manager_id, title, message, 'info', link)
 
     @staticmethod
     def notify_ei_assignment(item, assignee_id):
         title = "Phân công hạng mục"
         message = f"Bạn được phân công phụ trách hạng mục: '{item.title}'."
-        link = f"/commitments/{item.commitment_id}"
+        link = url_for('commitments_detail', commitment_id=item.commitment_id, _external=False)
         return Notification.create(assignee_id, title, message, 'info', link)
 
     @staticmethod
     def notify_ei_pending_review(item, manager_id):
         title = "Hạng mục chờ đánh giá"
         message = f"Hạng mục '{item.title}' đang chờ bạn đánh giá."
-        link = f"/commitments/{item.commitment_id}"
+        link = url_for('commitments_detail', commitment_id=item.commitment_id, _external=False)
         return Notification.create(manager_id, title, message, 'warning', link)
 
     @staticmethod
@@ -622,12 +621,12 @@ class Notification(db.Model):
         if review_note:
             message += f" Nhận xét: {review_note}"
         ntype = "success" if status == ExecutionItem.STATUS_COMPLETED else ("warning" if status == ExecutionItem.STATUS_NEEDS_REVISION else "danger")
-        link = f"/commitments/{item.commitment_id}"
+        link = url_for('commitments_detail', commitment_id=item.commitment_id, _external=False)
         return Notification.create(assignee_id, title, message, ntype, link)
 
     @staticmethod
     def notify_ei_reassigned(item, old_assignee_id, new_assignee_id, reason):
-        link = f"/commitments/{item.commitment_id}"
+        link = url_for('commitments_detail', commitment_id=item.commitment_id, _external=False)
         if old_assignee_id:
             msg_old = f"Hạng mục '{item.title}' đã được phân công cho người khác. Lý do: {reason}"
             Notification.create(old_assignee_id, "Thay đổi phụ trách", msg_old, 'info', link)
@@ -638,25 +637,35 @@ class Notification(db.Model):
     @staticmethod
     def notify_commitment_submitted(commitment, admin_id):
         title = "Cam kết chờ nghiệm thu"
-        message = f"Cam kết '{commitment.code}' đã được Lab nộp và đang chờ bạn nghiệm thu."
-        link = f"/commitments/{commitment.id}"
+        message = f"Cam kết '{commitment.code}' đã được Trưởng nhóm Lab nộp và đang chờ Quản lý duyệt."
+        link = url_for('commitments_detail', commitment_id=commitment.id, _external=False)
         return Notification.create(admin_id, title, message, 'info', link)
 
     @staticmethod
     def notify_commitment_reviewed(commitment, manager_id, decision, review_note):
+        if manager_id is None:
+            return None
         title = "Quyết định nghiệm thu Admin"
         message = f"Cam kết '{commitment.code}' đã có quyết định từ Admin: {decision}."
         if review_note:
             message += f" Nhận xét: {review_note}"
-        ntype = "success" if decision == Commitment.STATUS_APPROVED else ("warning" if decision == Commitment.STATUS_NEEDS_REVISION else "danger")
-        link = f"/commitments/{commitment.id}"
+        ntype = "success" if decision == Commitment.STATUS_COMPLETED else "danger"
+        
+        try:
+            if has_request_context():
+                link = url_for('commitments_detail', commitment_id=commitment.id, _external=False)
+            else:
+                link = f"/commitments/detail/{commitment.id}"
+        except Exception:
+            link = f"/commitments/detail/{commitment.id}"
+            
         return Notification.create(manager_id, title, message, ntype, link)
 
     @staticmethod
     def notify_ei_overdue(item, user_id):
         title = f"Quá hạn hạng mục: {item.title}"
         message = f"Hạng mục '{item.title}' đã quá hạn (deadline: {item.due_date.strftime('%d/%m/%Y %H:%M')})"
-        link = f"/commitments/{item.commitment_id}"
+        link = url_for('commitments_detail', commitment_id=item.commitment_id, _external=False)
         # Deduplication check: Avoid sending exact same unread overdue notification.
         existing = Notification.query.filter_by(user_id=user_id, title=title, is_read=False).first()
         if not existing:
@@ -667,7 +676,7 @@ class Notification(db.Model):
     def notify_commitment_overdue(commitment, user_id):
         title = f"Quá hạn cam kết: {commitment.code}"
         message = f"Cam kết '{commitment.title}' đã quá hạn (deadline: {commitment.deadline.strftime('%d/%m/%Y %H:%M')})"
-        link = f"/commitments/{commitment.id}"
+        link = url_for('commitments_detail', commitment_id=commitment.id, _external=False)
         # Deduplication check: Avoid sending exact same unread overdue notification.
         existing = Notification.query.filter_by(user_id=user_id, title=title, is_read=False).first()
         if not existing:

@@ -1,0 +1,300 @@
+20 task refactor của dự án
+Giai đoạn 1 — Chuẩn hóa Lab và User
+Task 1 — Tách việc tạo Lab khỏi việc gán người quản lý
+
+Sửa luồng tạo Lab theo hướng:
+
+admin có thể tạo Lab trước
+chưa bắt buộc có manager ngay
+bỏ nhập tay tên/email quản lý trong form tạo Lab
+
+Mục tiêu:
+
+Lab là một thực thể độc lập
+không phụ thuộc vào việc đã có manager hay chưa
+Task 2 — Sửa luồng tạo và sửa User
+
+Sửa form tạo user để:
+
+user được tạo độc lập
+không bắt buộc thuộc Lab ngay khi tạo
+email luôn thuộc về user
+không gán vai trò manager/member của lab ngay trong form user cơ bản
+
+Mục tiêu:
+
+tài khoản người dùng tách khỏi cấu trúc tổ chức
+Task 3 — Thêm chức năng quản lý thành viên trong từng Lab
+
+Tại màn hình Lab, cho phép admin:
+
+gán 1 manager chính cho Lab
+thêm member vào Lab
+xóa member khỏi Lab
+thay đổi manager sau này
+
+Mục tiêu:
+
+quan hệ giữa User và Lab được quản lý từ phía Lab, không nhập tay
+Task 4 — Dọn logic cũ của mô hình Lab/User
+
+Loại bỏ hoặc vô hiệu hóa các logic cũ như:
+
+manager name/email nhập tay trong Lab
+ép chọn lab quá sớm ở form tạo user
+các đoạn code cũ đang dựa trực tiếp vào user.lab_id như nguồn dữ liệu chính
+
+Mục tiêu:
+
+tránh chồng chéo giữa mô hình cũ và mô hình mới
+Task 5 — Chuẩn hóa phân quyền cho quản lý cấu trúc Lab
+
+Đảm bảo chỉ admin mới được:
+
+tạo lab
+sửa lab
+gán manager
+thêm/xóa member
+thao tác các màn quản trị cấu trúc tổ chức
+
+Mục tiêu:
+
+tách rõ quyền quản trị tổ chức khỏi quyền xử lý nghiệp vụ
+Giai đoạn 2 — Refactor Commitment và Hạng mục thực hiện
+Task 6 — Sửa luồng tạo Commitment theo hướng admin giao cho Lab
+
+Sửa Commitment để:
+
+admin tạo commitment
+commitment được giao cho đúng một lab
+lưu rõ lab nhận commitment, người tạo, ngày bắt đầu, deadline, ưu tiên, trạng thái ban đầu
+
+Mục tiêu:
+
+commitment là nhiệm vụ của lab, không phải giao trực tiếp cho một cá nhân như mô hình cũ
+Task 7 — Thêm ExecutionItem / Hạng mục thực hiện
+
+Tạo entity con nằm dưới Commitment để chia nhỏ commitment thành nhiều hạng mục thực hiện.
+
+Mỗi hạng mục nên có:
+
+tiêu đề
+mô tả
+thứ tự
+start date
+due date
+status
+weight
+yêu cầu minh chứng
+yêu cầu phê duyệt
+
+Mục tiêu:
+
+chuyển từ mô hình “1 commitment + 1 progress” sang mô hình “1 commitment gồm nhiều hạng mục”
+Task 8 — Gán người phụ trách cho từng hạng mục
+
+Cho phép admin hoặc lab manager:
+
+chọn assignee cho từng execution item
+assignee phải thuộc đúng lab đang nhận commitment
+
+Mục tiêu:
+
+mỗi hạng mục có người chịu trách nhiệm rõ ràng
+không cho giao sai người, sai lab
+Task 9 — Cho phép cập nhật tiến độ ở cấp hạng mục
+
+Tạo luồng cập nhật cho execution item:
+
+người phụ trách cập nhật trạng thái
+ghi chú tiến độ
+nêu blocker
+dự kiến hoàn thành
+lưu thành lịch sử cập nhật
+
+Mục tiêu:
+
+user không cập nhật tiến độ trực tiếp cho commitment nữa
+mọi cập nhật phải diễn ra ở cấp hạng mục
+Task 10 — Tự động tính tiến độ Commitment từ các hạng mục
+
+Xây helper/service để:
+
+tự tính Commitment.progress
+tự suy ra trạng thái tổng
+dựa trên trạng thái và trọng số của execution item
+
+Mục tiêu:
+
+bỏ cập nhật progress thủ công ở commitment
+tiến độ tổng phản ánh dữ liệu thật từ hạng mục
+Giai đoạn 3 — Minh chứng, review và kiểm soát chất lượng
+Task 11 — Upload minh chứng cho từng lần cập nhật hạng mục
+
+Cho phép đính kèm file vào mỗi ExecutionItemUpdate:
+
+upload nhiều file nếu cần
+validate loại file và dung lượng
+lưu metadata trong DB
+hiển thị file ở lịch sử cập nhật
+
+Mục tiêu:
+
+minh chứng phải gắn vào đúng lần cập nhật, không gắn mơ hồ vào commitment
+Task 12 — Quản lý lab review hạng mục
+
+Tạo luồng review cho execution item:
+
+khi item ở trạng thái pending_review, manager có thể duyệt
+kết quả review:
+completed
+needs_revision
+rejected
+nếu needs_revision hoặc rejected thì bắt buộc có ghi chú review
+
+Mục tiêu:
+
+thành viên cập nhật xong chưa có nghĩa là hạng mục tự động được công nhận hoàn thành
+Task 13 — Cho phép đổi người phụ trách hạng mục
+
+Tạo chức năng reassign execution item:
+
+admin hoặc lab manager được đổi assignee
+người mới vẫn phải thuộc cùng lab
+bắt buộc nhập lý do
+lưu lịch sử đổi người phụ trách
+
+Mục tiêu:
+
+xử lý trường hợp người cũ làm chưa đạt, bận, nghỉ hoặc không phù hợp
+Task 14 — Quản lý lab submit Commitment lên admin
+
+Khi các hạng mục đã đủ điều kiện, lab manager có thể:
+
+submit commitment lên admin
+trạng thái chuyển sang pending_admin_review
+
+Điều kiện submit:
+
+có execution item
+không còn item đang not_started, in_progress, pending_review
+đáp ứng các rule evidence/approval nếu có
+
+Mục tiêu:
+
+tạo bước chuyển chính thức từ nội bộ lab sang admin duyệt
+Task 15 — Admin duyệt Commitment
+
+Tạo luồng final review cho commitment ở cấp admin:
+
+chỉ admin được duyệt
+kết quả:
+completed
+needs_revision
+rejected
+nếu needs_revision hoặc rejected thì bắt buộc có review note
+
+Mục tiêu:
+
+hoàn thiện chuỗi phê duyệt nhiều cấp
+tránh việc lab tự kết luận commitment đã hoàn thành mà không qua admin
+Giai đoạn 4 — Hoàn thiện hệ thống
+Task 16 — Notification theo workflow mới
+
+Refactor thông báo để bám workflow mới, gồm các sự kiện:
+
+admin giao commitment cho lab
+gán execution item cho member
+item chuyển pending_review
+manager review needs_revision / rejected / completed
+reassign item
+submit commitment lên admin
+admin duyệt commitment
+overdue item / overdue commitment
+
+Mục tiêu:
+
+người dùng nhận được thông tin đúng lúc, đúng vai trò
+Task 17 — Dashboard theo vai trò
+
+Thiết kế dashboard riêng cho:
+
+Admin
+
+tổng commitment
+chờ admin review
+commitment quá hạn
+thống kê theo lab
+
+Lab manager
+
+commitment của lab mình
+item chờ review
+item cần sửa
+item quá hạn
+
+Lab member
+
+item được giao cho tôi
+item quá hạn
+item bị yêu cầu sửa
+item mới cập nhật gần đây
+
+Mục tiêu:
+
+mỗi vai trò nhìn thấy đúng thứ mình cần theo dõi
+Task 18 — Dọn luồng cập nhật tiến độ cũ ở Commitment
+
+Tắt hoặc loại bỏ logic cũ như:
+
+form slider cập nhật progress trực tiếp cho commitment
+route cũ cho update progress tay
+UI cũ hướng người dùng cập nhật commitment thay vì execution item
+
+Mục tiêu:
+
+tránh hệ thống tồn tại song song 2 workflow
+Task 19 — Tạo bộ dữ liệu mẫu cho demo
+
+Viết seed data cho workflow mới, bao gồm:
+
+admin
+lab manager
+lab member
+nhiều lab
+nhiều commitment
+execution item với nhiều trạng thái
+update history
+evidence
+item cần sửa
+item đã review
+commitment chờ admin duyệt
+
+Mục tiêu:
+
+có dữ liệu thật để demo nhanh, không phải nhập tay toàn bộ
+Task 20 — Audit và checklist test cuối
+
+Rà toàn bộ hệ thống sau refactor:
+
+quyền truy cập
+state transition
+validation
+progress calculation
+evidence upload
+review flow
+submit flow
+admin approval
+notification
+dashboard
+logic cũ còn sót
+
+Đồng thời tạo checklist test thủ công theo từng vai trò:
+
+admin
+lab manager
+lab member
+
+Mục tiêu:
+
+bảo đảm workflow mới chạy đúng trước khi demo hoặc nghiệm thu
