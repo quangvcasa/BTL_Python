@@ -105,7 +105,7 @@
                     </div>
                 </div>
 
-                {% if commitment.status == 'pending_admin' and commitment.submitter %}
+                {% if commitment.status == commitment.STATUS_PENDING_ADMIN and commitment.submitter %}
                 <div class="alert alert-info mt-4 mb-0 py-2">
                     <i class="fas fa-paper-plane me-2"></i><strong>Đã gửi Admin duyệt</strong>
                     <br><small>Bởi <strong>{{ commitment.submitter.display_name() }}</strong> vào lúc {{ commitment.submitted_at.strftime('%d/%m/%Y %H:%M') }}</small>
@@ -127,7 +127,7 @@
             <div class="card-footer d-flex gap-2 flex-wrap">
                 {# --- LEAD USER ACTION --- #}
                 {% set is_lead = (current_user.id == commitment.assigned_to) %}
-                {% if is_lead and commitment.status == 'active' %}
+                {% if is_lead and commitment.status == commitment.STATUS_ACTIVE %}
                     <form action="{{ url_for('commitment_submit_to_manager', commitment_id=commitment.id) }}"
                           method="POST" class="d-inline"
                           onsubmit="return confirm('Gửi kết quả cho Quản lý Lab kiểm tra?');">
@@ -140,7 +140,7 @@
 
                 {# --- LAB MANAGER ACTION --- #}
                 {% if current_user.is_lab_manager_of(commitment.lab_id) %}
-                    {% if commitment.status == 'pending_manager' %}
+                    {% if commitment.status == commitment.STATUS_PENDING_MANAGER %}
                     <form action="{{ url_for('commitment_manager_review', commitment_id=commitment.id) }}"
                           method="POST" class="d-inline d-flex gap-2"
                           onsubmit="return confirm('Bạn có chắc chắn thực hiện đánh giá này?');">
@@ -157,7 +157,7 @@
 
                 {# --- ADMIN ACTION --- #}
                 {% if current_user.is_admin() %}
-                    {% if commitment.status == 'pending_admin' %}
+                    {% if commitment.status == commitment.STATUS_PENDING_ADMIN %}
                     <a href="{{ url_for('commitment_admin_review', commitment_id=commitment.id) }}"
                        class="btn btn-success text-dark fw-bold">
                         <i class="fas fa-gavel me-2"></i>Nghiệm thu cuối cùng
@@ -289,7 +289,7 @@
                                 {% endif %}
                                 {% if can_manage_ei %}
                                 <td class="text-end text-nowrap">
-                                    {% if item.status == 'pending_review' %}
+                                    {% if item.status == item.STATUS_PENDING_REVIEW %}
                                     <a href="{{ url_for('ei_review', item_id=item.id) }}"
                                        class="btn btn-sm btn-warning mb-1 w-100" title="Đánh giá kết quả">
                                         <i class="fas fa-check-double text-dark me-1"></i><span class="text-dark">Đánh giá</span>

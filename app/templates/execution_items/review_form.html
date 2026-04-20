@@ -64,7 +64,7 @@
                         <div class="d-flex flex-column gap-2" id="decisionRadioGroup">
                             <div class="form-check p-0 mb-1">
                                 <input type="radio" class="btn-check" name="decision"
-                                       id="decision_completed" value="completed" autocomplete="off">
+                                       id="decision_completed" value="{{ item.STATUS_COMPLETED }}" autocomplete="off">
                                 <label class="btn btn-outline-success w-100 text-start" for="decision_completed">
                                     <i class="fas fa-check-circle me-2"></i><strong>Chấp nhận (Hoàn thành)</strong><br>
                                     <small class="fw-normal">Công việc đạt yêu cầu, nghiệm thu kết quả.</small>
@@ -72,7 +72,7 @@
                             </div>
                             <div class="form-check p-0 mb-1">
                                 <input type="radio" class="btn-check" name="decision"
-                                       id="decision_needs_revision" value="needs_revision" autocomplete="off">
+                                       id="decision_needs_revision" value="{{ item.STATUS_NEEDS_REVISION }}" autocomplete="off">
                                 <label class="btn btn-outline-warning w-100 text-start text-dark" for="decision_needs_revision">
                                     <i class="fas fa-exchange-alt me-2"></i><strong>Yêu cầu sửa đổi (Cần sửa)</strong><br>
                                     <small class="fw-normal">Chưa đạt yêu cầu, cần thành viên tiếp tục hoàn thiện.</small>
@@ -80,7 +80,7 @@
                             </div>
                             <div class="form-check p-0 mb-1">
                                 <input type="radio" class="btn-check" name="decision"
-                                       id="decision_rejected" value="rejected" autocomplete="off">
+                                       id="decision_rejected" value="{{ item.STATUS_REJECTED }}" autocomplete="off">
                                 <label class="btn btn-outline-danger w-100 text-start" for="decision_rejected">
                                     <i class="fas fa-times-circle me-2"></i><strong>Từ chối kết quả</strong><br>
                                     <small class="fw-normal">Huỷ bỏ, không nghiệm thu và đóng hạng mục.</small>
@@ -199,7 +199,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function toggleNoteRequired() {
         const val = getSelected();
-        const needsNote = (val === 'needs_revision' || val === 'rejected');
+        const needsNote = (val === '{{ item.STATUS_NEEDS_REVISION }}' || val === '{{ item.STATUS_REJECTED }}');
         noteField.required = needsNote;
         if(needsNote) {
             noteHint.style.display = 'block';

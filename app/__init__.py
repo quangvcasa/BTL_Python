@@ -1079,7 +1079,7 @@ def commitments_delete(commitment_id):
 
     ActivityLog.log(current_user.id, 'DELETE', 'Commitment', commitment_id,
                     f'Xóa cam kết: {commit_title}', get_client_ip())
-    flash('!Đã xóa cam kết thành công!', 'success')
+    flash('Đã xóa cam kết thành công!', 'success')
     return redirect(url_for('commitments_list'))
 
 
@@ -1797,7 +1797,7 @@ def ei_review(item_id):
 @app.route('/progress/update/<int:commitment_id>', methods=['GET', 'POST'])
 @login_required
 def progress_update(commitment_id):
-    flash('Commitment progress is now calculated from execution items and cannot be updated directly. Tính năng cập nhật trực tiếp đã ngưng hoạt động.', 'warning')
+    flash('Tiến độ cam kết hiện được tính toán dựa trên các hạng mục.', 'warning')
     return redirect(url_for('commitments_detail', commitment_id=commitment_id))
 
 # ============== FILE DOWNLOAD ROUTES ==============
@@ -2164,7 +2164,7 @@ def export_report_pdf():
     if output:
         return send_file(output, mimetype='application/pdf', as_attachment=True, download_name='bao_cao_dashboard.pdf')
 
-    flash('PDF export unavailable: reportlab chưa được cài đặt.', 'danger')
+    flash('Chức năng xuất PDF chưa khả dụng (thiếu reportlab).', 'danger')
     return redirect(url_for('reports'))
 
 

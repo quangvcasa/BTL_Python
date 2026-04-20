@@ -67,12 +67,12 @@
                             {% for val in allowed_statuses %}
                             {% set label = ei_statuses.get(val, val) %}
                             {% set colors = {
-                                'not_started': 'secondary',
-                                'in_progress': 'primary',
-                                'pending_review': 'info',
-                                'needs_revision': 'warning',
-                                'completed': 'success',
-                                'rejected': 'danger'
+                                '{{ item.STATUS_NOT_STARTED }}': 'secondary',
+                                '{{ item.STATUS_IN_PROGRESS }}': 'primary',
+                                '{{ item.STATUS_PENDING_REVIEW }}': 'info',
+                                '{{ item.STATUS_NEEDS_REVISION }}': 'warning',
+                                '{{ item.STATUS_COMPLETED }}': 'success',
+                                '{{ item.STATUS_REJECTED }}': 'danger'
                             } %}
                             <div>
                                 <input type="radio" class="btn-check" name="new_status"
@@ -230,7 +230,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function toggleBlocker() {
         const val = getSelected();
-        const needsBlocker = (val === 'needs_revision');
+        const needsBlocker = (val === '{{ item.STATUS_NEEDS_REVISION }}');
         blocker.style.display = needsBlocker ? 'block' : 'none';
         document.getElementById('blocker_reason').required = needsBlocker;
     }

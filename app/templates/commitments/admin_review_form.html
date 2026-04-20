@@ -56,7 +56,7 @@
                         <div class="d-flex flex-column gap-2" id="decisionRadioGroup">
                             <div class="form-check p-0 mb-1">
                                 <input type="radio" class="btn-check" name="decision"
-                                       id="decision_approved" value="completed" autocomplete="off">
+                                       id="decision_approved" value="{{ commitment.STATUS_COMPLETED }}" autocomplete="off">
                                 <label class="btn btn-outline-success w-100 text-start" for="decision_approved">
                                     <i class="fas fa-award me-2"></i><strong>Nghiệm thu (Hoàn thành)</strong><br>
                                     <small class="fw-normal">Toàn bộ hạng mục đạt yêu cầu, đóng cam kết.</small>
@@ -64,7 +64,7 @@
                             </div>
                             <div class="form-check p-0 mb-1">
                                 <input type="radio" class="btn-check" name="decision"
-                                       id="decision_rejected" value="rejected" autocomplete="off">
+                                       id="decision_rejected" value="{{ commitment.STATUS_REJECTED }}" autocomplete="off">
                                 <label class="btn btn-outline-danger w-100 text-start" for="decision_rejected">
                                     <i class="fas fa-ban me-2"></i><strong>Từ chối hoàn toàn</strong><br>
                                     <small class="fw-normal">Huỷ bỏ kết quả cam kết.</small>
