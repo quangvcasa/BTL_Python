@@ -204,7 +204,6 @@
                                 <th>Tiêu đề</th>
                                 <th>Trạng thái</th>
                                 <th>Đến hạn</th>
-                                <th>Trọng số</th>
                                 <th>Giao cho</th>
                                 <th>Cờ</th>
                                 <th>Cập nhật gần nhất</th>
@@ -236,7 +235,6 @@
                                     </small>
                                     {% else %}<span class="text-muted">—</span>{% endif %}
                                 </td>
-                                <td class="text-center">{{ item.weight }}</td>
                                 <td>
                                     {% if item.assignee %}
                                     <span class="badge bg-info">{{ item.assignee.display_name() }}</span>

@@ -52,10 +52,10 @@
                 <label for="priority" class="form-label">Ưu tiên</label>
                 <select class="form-select" id="priority" name="priority">
                     <option value="">Tất cả</option>
-                    <option value="Khẩn cấp" {% if request.args.get('priority') == 'Khẩn cấp' %}selected{% endif %}>🚨 Khẩn cấp</option>
-                    <option value="Cao"      {% if request.args.get('priority') == 'Cao' %}selected{% endif %}>⬆ Cao</option>
-                    <option value="Trung bình" {% if request.args.get('priority') == 'Trung bình' %}selected{% endif %}>➡ Trung bình</option>
-                    <option value="Thấp"     {% if request.args.get('priority') == 'Thấp' %}selected{% endif %}>⬇ Thấp</option>
+                    <option value="Khẩn cấp" class="text-danger fw-bold" {% if request.args.get('priority') == 'Khẩn cấp' %}selected{% endif %}>🚨 Khẩn cấp</option>
+                    <option value="Cao" class="text-danger" {% if request.args.get('priority') == 'Cao' %}selected{% endif %}>⬆ Cao</option>
+                    <option value="Trung bình" class="text-primary" {% if request.args.get('priority') == 'Trung bình' %}selected{% endif %}>➡ Trung bình</option>
+                    <option value="Thấp" class="text-secondary" {% if request.args.get('priority') == 'Thấp' %}selected{% endif %}>⬇ Thấp</option>
                 </select>
             </div>
             <div class="col-md-4">

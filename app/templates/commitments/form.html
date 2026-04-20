@@ -75,10 +75,10 @@
                             </label>
                             <select class="form-select" id="priority" name="priority" required>
                                 {% set cur_priority = commitment.priority if commitment else 'Trung bình' %}
-                                <option value="Thấp"      {% if cur_priority == 'Thấp' %}selected{% endif %}>⬇ Thấp</option>
-                                <option value="Trung bình" {% if cur_priority == 'Trung bình' %}selected{% endif %}>➡ Trung bình</option>
-                                <option value="Cao"       {% if cur_priority == 'Cao' %}selected{% endif %}>⬆ Cao</option>
-                                <option value="Khẩn cấp"  {% if cur_priority == 'Khẩn cấp' %}selected{% endif %}>🚨 Khẩn cấp</option>
+                                <option value="Thấp" class="text-secondary" {% if cur_priority == 'Thấp' %}selected{% endif %}>⬇ Thấp</option>
+                                <option value="Trung bình" class="text-primary" {% if cur_priority == 'Trung bình' %}selected{% endif %}>➡ Trung bình</option>
+                                <option value="Cao" class="text-danger" {% if cur_priority == 'Cao' %}selected{% endif %}>⬆ Cao</option>
+                                <option value="Khẩn cấp" class="text-danger fw-bold" {% if cur_priority == 'Khẩn cấp' %}selected{% endif %}>🚨 Khẩn cấp</option>
                             </select>
                         </div>
                         <div class="col-md-6 mb-3">

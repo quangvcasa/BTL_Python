@@ -71,7 +71,12 @@ def run_overdue_checks():
 
     # 1. Overdue Commitments
     overdue_commits = Commitment.query.filter(
-        Commitment.status.in_(['Mới', 'Đang thực hiện', 'Đã phân công', 'Có rủi ro']),
+        Commitment.status.in_([
+            Commitment.STATUS_NEW, 
+            Commitment.STATUS_ACTIVE, 
+            Commitment.STATUS_PENDING_MANAGER, 
+            Commitment.STATUS_REJECTED
+        ]),
         Commitment.deadline < now
     ).all()
     for c in overdue_commits:
@@ -281,7 +286,13 @@ def dashboard():
         context['commitments_by_lab'] = commitments_by_lab
 
         # We keep status Chart for admin
-        active = Commitment.query.filter(Commitment.status == Commitment.STATUS_ACTIVE).count()
+        active_statuses = [
+            Commitment.STATUS_ACTIVE,
+            Commitment.STATUS_PENDING_MANAGER,
+            Commitment.STATUS_PENDING_ADMIN,
+            Commitment.STATUS_REJECTED
+        ]
+        active = Commitment.query.filter(Commitment.status.in_(active_statuses)).count()
         completed = Commitment.query.filter(Commitment.status == Commitment.STATUS_COMPLETED).count()
         new_commits = Commitment.query.filter(Commitment.status == Commitment.STATUS_NEW).count()
         context['status_chart'] = {
@@ -319,7 +330,7 @@ def dashboard():
         context['waiting_submit'] = Commitment.query.filter(
             Commitment.lab_id.in_(lab_ids),
             Commitment.progress >= 100,
-            Commitment.status == Commitment.STATUS_COMPLETED
+            ~Commitment.status.in_([Commitment.STATUS_PENDING_ADMIN, Commitment.STATUS_COMPLETED])
         ).count()
         
         context['pending_items'] = Commitment.query.filter(
@@ -763,7 +774,15 @@ def commitments_list():
             )
         )
 
-    commitments = query.order_by(Commitment.deadline.asc()).all()
+    from sqlalchemy import case
+    priority_order = case(
+        (Commitment.priority == Commitment.PRIORITY_URGENT, 4),
+        (Commitment.priority == Commitment.PRIORITY_HIGH, 3),
+        (Commitment.priority == Commitment.PRIORITY_MEDIUM, 2),
+        (Commitment.priority == Commitment.PRIORITY_LOW, 1),
+        else_=0
+    )
+    commitments = query.order_by(priority_order.desc(), Commitment.created_at.asc()).all()
     labs = Lab.query.all()
 
     return render_template(
@@ -1116,7 +1135,7 @@ def ei_create(commitment_id):
         title       = request.form.get('title', '').strip()
         description = request.form.get('description', '').strip() or None
         order_no    = request.form.get('order_no', 0, type=int)
-        weight      = request.form.get('weight', 1.0, type=float)
+        weight = 1.0
         assigned_to = request.form.get('assigned_to', type=int) or None
         req_evidence = bool(request.form.get('requires_evidence'))
         req_approval = bool(request.form.get('requires_approval'))
@@ -1131,8 +1150,7 @@ def ei_create(commitment_id):
 
         if not title:
             errors.append('Tiêu đề không được để trống.')
-        if weight is None or weight <= 0:
-            errors.append('Trọng số phải là số dương.')
+
 
         start_date = due_date = None
         if start_str:
@@ -1220,7 +1238,7 @@ def ei_edit(item_id):
         title       = request.form.get('title', '').strip()
         description = request.form.get('description', '').strip() or None
         order_no    = request.form.get('order_no', item.order_no, type=int)
-        weight      = request.form.get('weight', item.weight, type=float)
+        weight = 1.0
         assigned_to = request.form.get('assigned_to', type=int) or None
         new_status  = request.form.get('status', item.status)
         req_evidence = bool(request.form.get('requires_evidence'))
@@ -1236,8 +1254,7 @@ def ei_edit(item_id):
 
         if not title:
             errors.append('Tiêu đề không được để trống.')
-        if weight is None or weight <= 0:
-            errors.append('Trọng số phải là số dương.')
+
         if new_status not in ExecutionItem.STATUS_LABELS:
             new_status = item.status
 

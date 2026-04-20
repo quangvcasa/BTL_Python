@@ -286,7 +286,7 @@ class Commitment(db.Model):
     def get_priority_color(self):
         return {
             self.PRIORITY_URGENT: 'danger',
-            self.PRIORITY_HIGH:   'warning',
+            self.PRIORITY_HIGH:   'danger',
             self.PRIORITY_MEDIUM: 'primary',
             self.PRIORITY_LOW:    'secondary',
         }.get(self.priority, 'secondary')
